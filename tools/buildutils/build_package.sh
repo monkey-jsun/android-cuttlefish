@@ -67,6 +67,12 @@ fi
 if [ -n "${container_image_name:-}" ]; then
   preserve_envvar+=" -e container_image_name=${container_image_name}"
 fi
+if [ -n "${CARGO_BAZEL_GENERATOR_URL:-}" ]; then
+  preserve_envvar+=" -e CARGO_BAZEL_GENERATOR_URL=${CARGO_BAZEL_GENERATOR_URL}"
+fi
+if [ -n "${CARGO_BAZEL_GENERATOR_SHA256:-}" ]; then
+  preserve_envvar+=" -e CARGO_BAZEL_GENERATOR_SHA256=${CARGO_BAZEL_GENERATOR_SHA256}"
+fi
 
 pushd "${PKGDIR}"
 echo "Installing package dependencies"
