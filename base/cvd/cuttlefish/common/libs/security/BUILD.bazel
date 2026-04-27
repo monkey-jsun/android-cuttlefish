@@ -16,6 +16,54 @@ cf_cc_library(
         "//cuttlefish/common/libs/fs",
         "//libbase",
         "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+    ],
+)
+
+cf_cc_library(
+    name = "keymaster_channel",
+    srcs = ["keymaster_channel.cpp"],
+    hdrs = ["keymaster_channel.h"],
+    deps = [
+        "@keymaster//:libkeymaster_messages",
+    ],
+)
+
+cf_cc_library(
+    name = "keymaster_channel_sharedfd",
+    srcs = ["keymaster_channel_sharedfd.cpp"],
+    hdrs = ["keymaster_channel_sharedfd.h"],
+    deps = [
+        ":keymaster_channel",
+        "//cuttlefish/common/libs/fs",
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@keymaster//:libkeymaster_messages",
+    ],
+)
+
+cf_cc_library(
+    name = "gatekeeper_channel",
+    hdrs = ["gatekeeper_channel.h"],
+    deps = [
+        "//cuttlefish/common/libs/transport",
+        "@gatekeeper//:libgatekeeper",
+    ],
+)
+
+cf_cc_library(
+    name = "gatekeeper_channel_sharedfd",
+    srcs = ["gatekeeper_channel_sharedfd.cpp"],
+    hdrs = ["gatekeeper_channel_sharedfd.h"],
+    deps = [
+        ":gatekeeper_channel",
+        "//cuttlefish/common/libs/transport",
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@gatekeeper//:libgatekeeper",
+        "@keymaster//:libkeymaster_messages",
     ],
 )
 

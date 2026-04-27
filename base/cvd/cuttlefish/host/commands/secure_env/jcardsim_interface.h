@@ -16,47 +16,24 @@
 
 #pragma once
 
-#include <iostream>
 #include <memory>
 #include <vector>
 
 #include "cuttlefish/result/result.h"
 
-#include <jni.h>
-
 namespace cuttlefish {
 
-// This class helps to interact with JCardSimulator
+// Stub interface for JCardSimulator.  The real implementation requires JNI
+// (libjvm.so + jcardsim.jar) which is not available in this build.
+// secure_env_not_windows_main.cpp gates all jcardsim usage behind
+// FLAGS_enable_jcard_simulator, so this stub is never called at runtime.
 class JCardSimInterface {
-  // Private Constructor
-  JCardSimInterface(JavaVM* jvm);
-
  public:
-  ~JCardSimInterface();
+  ~JCardSimInterface() = default;
 
-  // This function Loads and initializes a Java VM. Installs and
-  // personalizes the required applets.
   static Result<std::unique_ptr<JCardSimInterface>> Create();
 
-  // This function transmits the data to JCardSimulator and
-  // returns the response from simulator back to the caller.
   Result<std::vector<uint8_t>> Transmit(const uint8_t* data, size_t len) const;
-
- private:
-  Result<void> PersonalizeKeymintApplet(JNIEnv* env);
-  Result<void> ProvisionPresharedSecret(JNIEnv* env);
-  Result<std::vector<uint8_t>> OpenChannel(JNIEnv* env);
-  Result<std::vector<uint8_t>> SelectKeymintApplet(JNIEnv* env, uint8_t cla);
-  Result<std::vector<uint8_t>> CloseChannel(JNIEnv* env,
-                                            uint8_t channel_number);
-  Result<std::vector<uint8_t>> PreSharedKey();
-  Result<std::vector<uint8_t>> InternalTransmit(JNIEnv* env,
-                                                const uint8_t* data,
-                                                size_t len) const;
-
-  jobject jcardsim_proxy_inst_;
-  jclass jcardsim_proxy_class_;
-  JavaVM* jvm_;
 };
 
 }  // namespace cuttlefish

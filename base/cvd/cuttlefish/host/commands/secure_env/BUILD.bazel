@@ -4,8 +4,9 @@ package(
     default_visibility = ["//:android_cuttlefish"],
 )
 
+# Minimal secure_env (OEM lock only) — original target
 cf_cc_binary(
-    name = "secure_env",
+    name = "secure_env_oemlock",
     srcs = ["secure_env_only_oemlock.cpp"],
     deps = [
         ":suspend_resume_handler",
@@ -25,6 +26,303 @@ cf_cc_binary(
     ],
 )
 
+# TPM resource manager and storage
+cf_cc_library(
+    name = "tpm_resource_manager",
+    srcs = ["tpm_resource_manager.cpp"],
+    hdrs = ["tpm_resource_manager.h"],
+    deps = [
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@tpm2-tss//:tpm2-tss2-esys",
+        "@tpm2-tss//:tpm2-tss2-rc",
+        "@tpm2-tss//:tpm2-tss2-util",
+    ],
+)
+
+# TPM and in-process TPM implementations
+cf_cc_library(
+    name = "tpm",
+    features = ["-layering_check"],
+    srcs = [
+        "device_tpm.cpp",
+        "in_process_tpm.cpp",
+        "tpm_commands.cpp",
+        "tpm_commands.h",
+    ],
+    hdrs = [
+        "device_tpm.h",
+        "in_process_tpm.h",
+        "tpm.h",
+    ],
+    deps = [
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@ms-tpm-20-ref//:platform",
+        "@ms-tpm-20-ref//:platform_headers",
+        "@ms-tpm-20-ref//:simulator_headers",
+        "@ms-tpm-20-ref//:simulator_lib",
+        "@ms-tpm-20-ref//:tpm",
+        "@ms-tpm-20-ref//:tpm_headers",
+        "@tpm2-tss//:tpm2-tss2-esys",
+        "@tpm2-tss//:tpm2-tss2-util",
+        "@tpm2-tss//:tpm2-tss2-rc",
+        "@tpm2-tss//:tpm2-tss2-tcti",
+    ],
+)
+
+# TPM crypto and serialization helpers
+cf_cc_library(
+    name = "tpm_crypto",
+    srcs = [
+        "composite_serialization.cpp",
+        "encrypted_serializable.cpp",
+        "hmac_serializable.cpp",
+        "json_serializable.cpp",
+        "primary_key_builder.cpp",
+        "tpm_auth.cpp",
+        "tpm_encrypt_decrypt.cpp",
+        "tpm_hmac.cpp",
+        "tpm_random_source.cpp",
+        "tpm_serialize.cpp",
+    ],
+    hdrs = [
+        "composite_serialization.h",
+        "encrypted_serializable.h",
+        "hmac_serializable.h",
+        "json_serializable.h",
+        "primary_key_builder.h",
+        "tpm_auth.h",
+        "tpm_encrypt_decrypt.h",
+        "tpm_hmac.h",
+        "tpm_random_source.h",
+        "tpm_serialize.h",
+    ],
+    deps = [
+        ":tpm",
+        ":tpm_resource_manager",
+        "//cuttlefish/result",
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@boringssl//:crypto",
+        "@jsoncpp",
+        "@keymaster//:libkeymaster_messages",
+        "@keymaster//:libkeymaster_portable",
+        "@tpm2-tss//:tpm2-tss2-esys",
+        "@tpm2-tss//:tpm2-tss2-util",
+        "@tpm2-tss//:tpm2-tss2-mu",
+        "@tpm2-tss//:tpm2-tss2-rc",
+    ],
+)
+
+# TPM keymaster context and enforcement
+cf_cc_library(
+    name = "tpm_keymaster",
+    srcs = [
+        "tpm_attestation_record.cpp",
+        "tpm_key_blob_maker.cpp",
+        "tpm_keymaster_context.cpp",
+        "tpm_keymaster_enforcement.cpp",
+        "tpm_remote_provisioning_context.cpp",
+    ],
+    hdrs = [
+        "proxy_keymaster_context.h",
+        "tpm_attestation_record.h",
+        "tpm_key_blob_maker.h",
+        "tpm_keymaster_context.h",
+        "tpm_keymaster_enforcement.h",
+        "tpm_remote_provisioning_context.h",
+    ],
+    deps = [
+        ":tpm_crypto",
+        ":tpm_gatekeeper",
+        ":tpm_resource_manager",
+        "//cuttlefish/host/commands/secure_env/storage",
+        "//cuttlefish/result",
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@boringssl//:crypto",
+        "@cppbor//:libcppbor",
+        "@keymaster//:libcppcose_rkp",
+        "@keymaster//:libkeymaster_messages",
+        "@keymaster//:libkeymaster_portable",
+        "@keymaster//:libpuresoftkeymasterdevice_host",
+        "@keymaster//:libsoft_attestation_cert",
+        "@tpm2-tss//:tpm2-tss2-esys",
+        "@tpm2-tss//:tpm2-tss2-mu",
+        "@tpm2-tss//:tpm2-tss2-rc",
+        "@tpm2-tss//:tpm2-tss2-util",
+    ],
+)
+
+# TPM gatekeeper
+cf_cc_library(
+    name = "tpm_gatekeeper",
+    srcs = ["tpm_gatekeeper.cpp"],
+    hdrs = [
+        "gatekeeper_storage.h",
+        "soft_gatekeeper.h",
+        "tpm_gatekeeper.h",
+    ],
+    deps = [
+        ":tpm_crypto",
+        ":tpm_resource_manager",
+        "//cuttlefish/host/commands/secure_env/storage",
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@gatekeeper//:libgatekeeper",
+        "@jsoncpp",
+        "@keymaster//:libkeymaster_portable",
+        "@scrypt//:libscrypt_static",
+        "@tpm2-tss//:tpm2-tss2-esys",
+        "@tpm2-tss//:tpm2-tss2-util",
+    ],
+)
+
+# TPM FFI bridge for Rust KeyMint TA
+cf_cc_library(
+    name = "tpm_ffi",
+    srcs = ["tpm_ffi.cpp"],
+    hdrs = ["tpm_ffi.h"],
+    deps = [
+        ":tpm_crypto",
+        ":tpm_resource_manager",
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+    ],
+)
+
+# Keymaster responder
+cf_cc_library(
+    name = "keymaster_responder",
+    srcs = ["keymaster_responder.cpp"],
+    hdrs = ["keymaster_responder.h"],
+    deps = [
+        "//cuttlefish/common/libs/security:keymaster_channel",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@keymaster//:libkeymaster_messages",
+        "@keymaster//:libkeymaster_portable",
+    ],
+)
+
+# Gatekeeper responder
+cf_cc_library(
+    name = "gatekeeper_responder",
+    srcs = ["gatekeeper_responder.cpp"],
+    hdrs = ["gatekeeper_responder.h"],
+    deps = [
+        "//cuttlefish/common/libs/security:gatekeeper_channel",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@gatekeeper//:libgatekeeper",
+    ],
+)
+
+# ConfUI signing server
+cf_cc_library(
+    name = "confui_sign_server",
+    srcs = ["confui_sign_server.cpp"],
+    hdrs = ["confui_sign_server.h"],
+    deps = [
+        ":tpm_crypto",
+        ":tpm_keymaster",
+        ":tpm_resource_manager",
+        "//cuttlefish/common/libs/fs",
+        "//cuttlefish/common/libs/security:confui_sign",
+        "//cuttlefish/host/libs/config:cuttlefish_config",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+    ],
+)
+
+# JCardSim stub (JNI not available in this build)
+cf_cc_library(
+    name = "jcardsim_interface",
+    srcs = ["jcardsim_interface.cpp"],
+    hdrs = ["jcardsim_interface.h"],
+    deps = [
+        "//cuttlefish/result",
+    ],
+)
+
+cf_cc_library(
+    name = "jcardsim_responder",
+    srcs = ["jcardsim_responder.cpp"],
+    hdrs = ["jcardsim_responder.h"],
+    deps = [
+        ":jcardsim_interface",
+        "//cuttlefish/common/libs/transport",
+        "//cuttlefish/result",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@keymaster//:libkeymaster_messages",
+    ],
+)
+
+# Stub for Rust KeyMint TA (Phase 3 will replace with real Rust library)
+cf_cc_library(
+    name = "kmr_ta_stub",
+    srcs = ["rust/kmr_ta_stub.cpp"],
+    hdrs = ["rust/kmr_ta.h"],
+    deps = [
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+    ],
+)
+
+# Full secure_env with KeyMint/Keymaster/Gatekeeper/OemLock/TPM support
+cf_cc_binary(
+    name = "secure_env",
+    srcs = ["secure_env_not_windows_main.cpp"],
+    deps = [
+        ":confui_sign_server",
+        ":gatekeeper_responder",
+        ":jcardsim_interface",
+        ":jcardsim_responder",
+        ":keymaster_responder",
+        ":kmr_ta_stub",
+        ":suspend_resume_handler",
+        ":tpm",
+        ":tpm_ffi",
+        ":tpm_gatekeeper",
+        ":tpm_keymaster",
+        ":tpm_resource_manager",
+        ":worker_thread_loop_body",
+        "//cuttlefish/common/libs/fs",
+        "//cuttlefish/common/libs/security:confui_sign",
+        "//cuttlefish/common/libs/security:gatekeeper_channel_sharedfd",
+        "//cuttlefish/common/libs/security:keymaster_channel_sharedfd",
+        "//cuttlefish/common/libs/transport",
+        "//cuttlefish/host/commands/kernel_log_monitor:kernel_log_monitor_utils",
+        "//cuttlefish/host/commands/secure_env/oemlock",
+        "//cuttlefish/host/commands/secure_env/oemlock:oemlock_responder",
+        "//cuttlefish/host/commands/secure_env/storage",
+        "//cuttlefish/host/commands/secure_env/storage:insecure_json_storage",
+        "//cuttlefish/host/commands/secure_env/storage:tpm_storage",
+        "//cuttlefish/host/libs/config:known_paths",
+        "//cuttlefish/host/libs/config:logging",
+        "//libbase",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@fruit",
+        "@gatekeeper//:libgatekeeper",
+        "@gflags",
+        "@keymaster//:libkeymaster_messages",
+        "@keymaster//:libkeymaster_portable",
+        "@keymaster//:libpuresoftkeymasterdevice_host",
+        "@tpm2-tss//:tpm2-tss2-esys",
+        "@tpm2-tss//:tpm2-tss2-util",
+        "@tpm2-tss//:tpm2-tss2-rc",
+    ],
+)
+
 cf_cc_library(
     name = "suspend_resume_handler",
     srcs = ["suspend_resume_handler.cpp"],
@@ -35,6 +333,7 @@ cf_cc_library(
         "//cuttlefish/result",
         "//libbase",
         "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
     ],
 )
 

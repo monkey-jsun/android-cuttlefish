@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "absl/log/log.h"
 #include "cuttlefish/host/commands/secure_env/worker_thread_loop_body.h"
 
 #include "cuttlefish/common/libs/fs/shared_select.h"

@@ -25,5 +25,24 @@ cf_cc_library(
     hdrs = ["storage.h"],
     deps = [
         "//cuttlefish/result",
+        "@keymaster//:libkeymaster_messages",
+    ],
+)
+
+cf_cc_library(
+    name = "tpm_storage",
+    srcs = ["tpm_storage.cpp"],
+    hdrs = ["tpm_storage.h"],
+    deps = [
+        ":storage",
+        "//cuttlefish/host/commands/secure_env:tpm_crypto",
+        "//cuttlefish/host/commands/secure_env:tpm_resource_manager",
+        "//cuttlefish/result",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/log:check",
+        "@jsoncpp",
+        "@tpm2-tss//:tpm2-tss2-esys",
+        "@tpm2-tss//:tpm2-tss2-util",
+        "@tpm2-tss//:tpm2-tss2-rc",
     ],
 )

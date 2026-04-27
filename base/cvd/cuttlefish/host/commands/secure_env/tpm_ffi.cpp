@@ -49,31 +49,31 @@ uint32_t tpm_hmac(void* trm, const uint8_t* data, uint32_t data_len,
 
 void secure_env_log(const char* file, unsigned int line, int severity,
                     const char* tag, const char* msg) {
-  android::base::LogSeverity severity_enum;
+  // Severity mapping from Rust log crate: 0=VERBOSE, 1=DEBUG, 2=INFO,
+  // 3=WARNING, 4=ERROR, 5=FATAL_WITHOUT_ABORT, 6=FATAL
   switch (severity) {
-    case 0:
-      severity_enum = android::base::LogSeverity::VERBOSE;
+    case 0:  // VERBOSE
+      VLOG(1) << "[" << tag << "] " << msg;
       break;
-    case 1:
-      severity_enum = android::base::LogSeverity::DEBUG;
+    case 1:  // DEBUG
+      VLOG(0) << "[" << tag << "] " << msg;
       break;
-    case 2:
-      severity_enum = android::base::LogSeverity::INFO;
+    case 2:  // INFO
+      LOG(INFO) << "[" << tag << "] " << msg;
       break;
-    case 3:
-      severity_enum = android::base::LogSeverity::WARNING;
+    case 3:  // WARNING
+      LOG(WARNING) << "[" << tag << "] " << msg;
       break;
     default:
-    case 4:
-      severity_enum = android::base::LogSeverity::ERROR;
+    case 4:  // ERROR
+      LOG(ERROR) << "[" << tag << "] " << msg;
       break;
-    case 5:
-      severity_enum = android::base::LogSeverity::FATAL_WITHOUT_ABORT;
+    case 5:  // FATAL_WITHOUT_ABORT
+      LOG(ERROR) << "[FATAL] [" << tag << "] " << msg;
       break;
-    case 6:
-      severity_enum = android::base::LogSeverity::FATAL;
+    case 6:  // FATAL
+      LOG(FATAL) << "[" << tag << "] " << msg;
       break;
   }
-  android::base::LogMessage::LogLine(file, line, severity_enum, tag, msg);
 }
 }
