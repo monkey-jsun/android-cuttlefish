@@ -1,0 +1,8 @@
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "scrypt",
+    build_file = "@//build_external/scrypt:BUILD.scrypt.bazel",
+    commit = "ce9589686c1e6de5ec85e7f4da3b072e401f2e62",
+    remote = "https://android.googlesource.com/platform/external/scrypt",
+)

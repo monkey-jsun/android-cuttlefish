@@ -1,0 +1,17 @@
+cc_library(
+    name = "libcppbor",
+    srcs = [
+        "src/cppbor.cpp",
+        "src/cppbor_parse.cpp",
+    ],
+    hdrs = glob(["include/cppbor/*.h"]),
+    includes = [
+        "include",
+        "include/cppbor",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@@//libbase",
+        "@boringssl//:crypto",
+    ],
+)

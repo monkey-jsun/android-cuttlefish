@@ -9,6 +9,9 @@ package(
         "@android_system_extras//:__subpackages__",
         "@e2fsprogs//:__subpackages__",
         "@f2fs_tools//:__subpackages__",
+        "@cppbor//:__subpackages__",
+        "@keymaster//:__subpackages__",
+        "@tpm2-tss//:__subpackages__",
         "@wmediumd//:__subpackages__",
     ],
 )

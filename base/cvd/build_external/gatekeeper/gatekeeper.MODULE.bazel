@@ -1,0 +1,8 @@
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "gatekeeper",
+    build_file = "@//build_external/gatekeeper:BUILD.gatekeeper.bazel",
+    commit = "604418333097ac26ab0ba51319221bf2bb2b6d2f",  # android16-qpr2-release
+    remote = "https://android.googlesource.com/platform/system/gatekeeper",
+)

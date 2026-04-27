@@ -1,0 +1,6 @@
+cc_library(
+    name = "libhardware_headers",
+    hdrs = glob(["include/hardware/*.h"]),
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)

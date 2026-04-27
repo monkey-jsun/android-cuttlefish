@@ -1,75 +1,76 @@
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
-# Use the provided configuration, plus patches in build_external/ms-tpm-20-ref.
-cc_library(
-    name = "tpm_configuration",
-    srcs = glob(["TPMCmd/TpmConfiguration/**/*.h"]),
-    includes = ["TPMCmd/TpmConfiguration"],
-)
+# Modeled after Android.bp from AOSP android16-qpr2-release.
+# This fork (platform/external/ms-tpm-20-ref) has a different layout from
+# Microsoft's upstream v1.83r1: sources are in tpm/src/ subdirectories,
+# includes are in tpm/include/Ossl/ (not tpm/cryptolibs/Ossl/include/),
+# there is no TpmConfiguration/ directory, and Platform_fp.h exists.
 
-# From PLATFORM_H in bootstrap
+_COPTS = [
+    "-std=gnu11",
+    "-Werror",
+    "-Wall",
+    "-Wformat-security",
+    "-fstack-protector-all",
+    "-fPIC",
+    # Suppress warnings matching Android.bp cflags
+    "-Wno-cast-function-type-mismatch",
+    "-Wno-empty-body",
+    "-Wno-logical-op-parentheses",
+    "-Wno-missing-field-initializers",
+    "-Wno-typedef-redefinition",
+    "-Wno-unused-parameter",
+]
+
+_DEFINES = [
+    "HASH_LIB=Ossl",
+    "SYM_LIB=Ossl",
+    "MATH_LIB=Ossl",
+    # BoringSSL has no Camellia — match Android.bp
+    "ALG_CAMELLIA=ALG_NO",
+]
+
 cc_library(
     name = "platform_headers",
-    srcs = glob(["TPMCmd/Platform/**/*.h"]),
-    # From PLATFORM_INC in TPMCmd/Makefile.am
+    hdrs = glob(["TPMCmd/Platform/**/*.h"]),
     includes = [
         "TPMCmd/Platform/include",
         "TPMCmd/Platform/include/prototypes",
     ],
-    deps = [":tpm_configuration"],
+    visibility = ["//visibility:public"],
 )
 
-# From SIMULATOR_H in bootstrap
 cc_library(
     name = "simulator_headers",
-    srcs = glob(["TPMCmd/Simulator/**/*.h"]),
-    # From SIMULATOR_INC in TPMCmd/Makefile.am
+    hdrs = glob(["TPMCmd/Simulator/**/*.h"]),
     includes = [
         "TPMCmd/Simulator/include",
         "TPMCmd/Simulator/include/prototypes",
     ],
+    visibility = ["//visibility:public"],
 )
 
-# From TPM_H in bootstrap; added .inl files
 cc_library(
     name = "tpm_headers",
-    srcs = glob([
-        "TPMCmd/tpm/**/*.h",
-        "TPMCmd/tpm/**/*.inl",
+    hdrs = glob([
+        "TPMCmd/tpm/include/**/*.h",
     ]),
-    # From TPM_INC in TPMCmd/Makefile.am
     includes = [
-        "TPMCmd/TpmConfiguration",
-        "TPMCmd/tpm/cryptolibs",
-        "TPMCmd/tpm/cryptolibs/Ossl/include",
-        "TPMCmd/tpm/cryptolibs/TpmBigNum/include",
-        "TPMCmd/tpm/cryptolibs/common/include",
         "TPMCmd/tpm/include",
-        "TPMCmd/tpm/include/platform_interface",
-        "TPMCmd/tpm/include/platform_interface/prototypes",
-        "TPMCmd/tpm/include/private",
-        "TPMCmd/tpm/include/private/prototypes",
-        "TPMCmd/tpm/include/public",
+        "TPMCmd/tpm/include/Ossl",
+        "TPMCmd/tpm/include/prototypes",
     ],
+    visibility = ["//visibility:public"],
 )
 
 cc_library(
     name = "platform",
-    srcs = glob(["TPMCmd/Platform/**/*.c"]),
-    copts = [
-        "-std=gnu11",
-        "-Werror",
-        "-Wall",
-        "-Wformat-security",
-        "-fstack-protector-all",
-        "-fPIC",
-    ],
-    defines = [
-        "HASH_LIB=Ossl",
-        "SYM_LIB=Ossl",
-        "MATH_LIB=TpmBigNum",
-        "BN_MATH_LIB=Ossl",
+    srcs = glob(["TPMCmd/Platform/src/*.c"]),
+    copts = _COPTS,
+    defines = _DEFINES,
+    visibility = [
+        "@//cuttlefish/host/commands/secure_env:__subpackages__",
     ],
     deps = [
         ":platform_headers",
@@ -79,20 +80,26 @@ cc_library(
 
 cc_library(
     name = "tpm",
-    srcs = glob(["TPMCmd/tpm/**/*.c"]),
-    copts = [
-        "-std=gnu11",
-        "-Werror",
-        "-Wall",
-        "-Wformat-security",
-        "-fstack-protector-all",
-        "-fPIC",
-    ],
-    defines = [
-        "HASH_LIB=Ossl",
-        "SYM_LIB=Ossl",
-        "MATH_LIB=TpmBigNum",
-        "BN_MATH_LIB=Ossl",
+    srcs = glob(
+        [
+            "TPMCmd/tpm/src/command/**/*.c",
+            "TPMCmd/tpm/src/crypt/*.c",
+            "TPMCmd/tpm/src/crypt/ossl/*.c",
+            "TPMCmd/tpm/src/events/*.c",
+            "TPMCmd/tpm/src/main/*.c",
+            "TPMCmd/tpm/src/subsystem/*.c",
+            "TPMCmd/tpm/src/support/*.c",
+            "TPMCmd/tpm/src/X509/*.c",
+        ],
+        exclude = [
+            "TPMCmd/tpm/src/crypt/ltc/*.c",
+            "TPMCmd/tpm/src/crypt/wolf/*.c",
+        ],
+    ),
+    copts = _COPTS,
+    defines = _DEFINES,
+    visibility = [
+        "@//cuttlefish/host/commands/secure_env:__subpackages__",
     ],
     deps = [
         ":platform_headers",
@@ -108,26 +115,14 @@ cc_library(
         "TPMCmd/Simulator/src/TPMCmdp.c",
         "TPMCmd/Simulator/src/TcpServer.c",
     ],
-    copts = [
-        "-std=gnu11",
-        "-Werror",
-        "-Wall",
-        "-Wformat-security",
-        "-fstack-protector-all",
-        "-fPIC",
-    ],
-    defines = [
-        "HASH_LIB=Ossl",
-        "SYM_LIB=Ossl",
-        "MATH_LIB=TpmBigNum",
-        "BN_MATH_LIB=Ossl",
-    ],
+    copts = _COPTS,
+    defines = _DEFINES,
     visibility = [
         "@//cuttlefish/host/commands/secure_env:__subpackages__",
     ],
     deps = [
-        ":simulator_headers",
         ":platform_headers",
+        ":simulator_headers",
         ":tpm_headers",
     ],
 )
@@ -137,20 +132,8 @@ cc_binary(
     srcs = [
         "TPMCmd/Simulator/src/TPMCmds.c",
     ],
-    copts = [
-        "-std=gnu11",
-        "-Werror",
-        "-Wall",
-        "-Wformat-security",
-        "-fstack-protector-all",
-        "-fPIC",
-    ],
-    defines = [
-        "HASH_LIB=Ossl",
-        "SYM_LIB=Ossl",
-        "MATH_LIB=TpmBigNum",
-        "BN_MATH_LIB=Ossl",
-    ],
+    copts = _COPTS,
+    defines = _DEFINES,
     linkopts = [
         "-Wl,--no-undefined",
         "-Wl,-z,noexecstack",

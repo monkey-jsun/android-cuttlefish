@@ -1,0 +1,8 @@
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "tpm2-tss",
+    build_file = "@//build_external/tss2:BUILD.tpm2-tss.bazel",
+    commit = "09ac0e71dc8456e9716637de6a9189b220694f99",  # android16-qpr2-release
+    remote = "https://android.googlesource.com/platform/external/tpm2-tss",
+)

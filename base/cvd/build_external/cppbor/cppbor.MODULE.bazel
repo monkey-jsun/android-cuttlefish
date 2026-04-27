@@ -1,0 +1,8 @@
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "cppbor",
+    build_file = "@//build_external/cppbor:BUILD.cppbor.bazel",
+    commit = "93f3967a33aaba470449728abdb972834537b223",  # android16-qpr2-release
+    remote = "https://android.googlesource.com/platform/system/libcppbor",
+)

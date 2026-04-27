@@ -1,0 +1,22 @@
+cc_library(
+    name = "libscrypt_static",
+    srcs = [
+        "config.h",
+        "lib/crypto/crypto_scrypt-ref.c",
+        "lib/util/sysendian.h",
+        "scrypt_platform.h",
+    ],
+    hdrs = ["lib/crypto/crypto_scrypt.h"],
+    copts = [
+        "-DHAVE_CONFIG_H",
+        "-DUSE_OPENSSL_PBKDF2",
+        "-Wno-unused-variable",
+    ],
+    includes = [
+        ".",
+        "lib/crypto",
+        "lib/util",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ["@boringssl//:crypto"],
+)

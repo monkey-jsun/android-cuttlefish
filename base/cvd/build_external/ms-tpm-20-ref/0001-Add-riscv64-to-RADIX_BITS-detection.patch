@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jun Sun <jsun@junsun.net>
+Date: Sun, 27 Apr 2026 00:00:00 +0000
+Subject: [PATCH] Add riscv64 to RADIX_BITS detection in LibSupport.h
+
+The RADIX_BITS auto-detection in LibSupport.h does not recognize
+__riscv with __riscv_xlen == 64, causing a compile error on riscv64.
+
+diff --git a/TPMCmd/tpm/include/LibSupport.h b/TPMCmd/tpm/include/LibSupport.h
+index 1234567..abcdefg 100644
+--- a/TPMCmd/tpm/include/LibSupport.h
++++ b/TPMCmd/tpm/include/LibSupport.h
+@@ -43,7 +43,8 @@
+         || defined(__amd64__) || defined(__amd64)                                   \
+         || defined(_WIN64) || defined(_M_X64)                                       \
+         || defined(_M_ARM64) || defined(__aarch64__)                                \
+-        || defined(__PPC64__) || defined(__s390x__)                                 \
++        || defined(__PPC64__) || defined(__s390x__)                                  \
++        || (defined(__riscv) && (__riscv_xlen == 64))                               \
+         || defined(__powerpc64__) || defined(__ppc64__)
+ #       define RADIX_BITS                      64
+ #   elif defined(__i386__) || defined(__i386) || defined(i386)                      \

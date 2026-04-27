@@ -1,0 +1,114 @@
+TSS2_COPTS = [
+    "-DMAXLOGLEVEL=6",
+    "-DBSSL",  # Use BoringSSL instead of gcrypt
+]
+
+TSS2_INCLUDES = [
+    "include",
+    "include/tss2",
+    "src",
+]
+
+# tpm2-tss2-util: logging and utility functions
+cc_library(
+    name = "tpm2-tss2-util",
+    srcs = glob([
+        "src/util/*.c",
+        "src/util/*.cpp",
+        "src/util/*.h",
+    ]),
+    hdrs = glob(["include/tss2/*.h"]),
+    copts = TSS2_COPTS,
+    includes = TSS2_INCLUDES,
+    visibility = ["//visibility:public"],
+    deps = ["@@//libbase"],
+)
+
+# tpm2-tss2-mu: marshaling/unmarshaling
+cc_library(
+    name = "tpm2-tss2-mu",
+    srcs = glob(["src/tss2-mu/*.c"]),
+    copts = TSS2_COPTS,
+    includes = TSS2_INCLUDES + ["src/tss2-mu"],
+    visibility = ["//visibility:public"],
+    deps = [":tpm2-tss2-util"],
+)
+
+# tpm2-tss2-sys: system API
+cc_library(
+    name = "tpm2-tss2-sys",
+    srcs = glob([
+        "src/tss2-sys/*.c",
+        "src/tss2-sys/*.h",
+        "src/tss2-sys/api/*.c",
+    ]),
+    copts = TSS2_COPTS,
+    includes = TSS2_INCLUDES + ["src/tss2-sys", "src/tss2-sys/api"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":tpm2-tss2-mu",
+        ":tpm2-tss2-util",
+    ],
+)
+
+# tpm2-tss2-tcti: TPM command transmission interface
+cc_library(
+    name = "tpm2-tss2-tcti",
+    srcs = glob([
+        "src/tss2-tcti/*.c",
+        "src/tss2-tcti/*.h",
+    ], exclude = [
+        "src/tss2-tcti/tcti-spi*.c",
+        "src/tss2-tcti/tcti-spi*.h",
+        "src/tss2-tcti/tcti-pcap.c",
+        "src/tss2-tcti/tcti-pcap.h",
+        "src/tss2-tcti/tcti-tbs.c",
+        "src/tss2-tcti/tcti-mssim.c",
+        "src/tss2-tcti/tctildr-dl.c",
+        "src/tss2-tcti/tctildr-dl.h",
+    ]),
+    copts = TSS2_COPTS,
+    includes = TSS2_INCLUDES + ["src/tss2-tcti"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":tpm2-tss2-mu",
+        ":tpm2-tss2-util",
+    ],
+)
+
+# tpm2-tss2-esys: enhanced system API (main entry point)
+cc_library(
+    name = "tpm2-tss2-esys",
+    srcs = glob([
+        "src/tss2-esys/api/*.c",
+        "src/tss2-esys/*.h",
+    ]) + [
+        "src/tss2-esys/esys_context.c",
+        "src/tss2-esys/esys_crypto.c",
+        "src/tss2-esys/esys_crypto_bssl.c",
+        "src/tss2-esys/esys_free.c",
+        "src/tss2-esys/esys_iutil.c",
+        "src/tss2-esys/esys_mu.c",
+        "src/tss2-esys/esys_tr.c",
+    ],
+    copts = TSS2_COPTS,
+    includes = TSS2_INCLUDES + ["src/tss2-esys"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":tpm2-tss2-mu",
+        ":tpm2-tss2-sys",
+        ":tpm2-tss2-tcti",
+        ":tpm2-tss2-util",
+        "@boringssl//:crypto",
+    ],
+)
+
+# tpm2-tss2-rc: return code decoding
+cc_library(
+    name = "tpm2-tss2-rc",
+    srcs = glob(["src/tss2-rc/*.c"]),
+    copts = TSS2_COPTS,
+    includes = TSS2_INCLUDES + ["src/tss2-rc"],
+    visibility = ["//visibility:public"],
+    deps = [":tpm2-tss2-sys"],
+)

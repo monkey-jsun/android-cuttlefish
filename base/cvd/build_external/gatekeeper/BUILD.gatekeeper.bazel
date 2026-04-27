@@ -1,0 +1,13 @@
+cc_library(
+    name = "libgatekeeper",
+    srcs = [
+        "gatekeeper.cpp",
+        "gatekeeper_messages.cpp",
+    ],
+    hdrs = glob(["include/gatekeeper/*.h"]),
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@libhardware//:libhardware_headers",
+    ],
+)
