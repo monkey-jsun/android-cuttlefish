@@ -15,8 +15,6 @@
 
 #pragma once
 
-#include <stdint.h>
-
 #include <map>
 #include <vector>
 
@@ -134,7 +132,7 @@ class ProxyKeymasterContext : public keymaster::KeymasterContext {
   }
 
   keymaster_error_t CheckConfirmationToken(
-      const uint8_t* input_data, size_t input_data_size,
+      const std::uint8_t* input_data, size_t input_data_size,
       const uint8_t confirmation_token[keymaster::kConfirmationTokenSize])
       const {
     return wrapped_.CheckConfirmationToken(input_data, input_data_size,

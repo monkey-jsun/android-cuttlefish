@@ -17,6 +17,7 @@
 
 #include <android-base/endian.h>
 #include "absl/log/log.h"
+#include "absl/log/check.h"
 
 #ifdef _WIN32
 #include <sysinfoapi.h>

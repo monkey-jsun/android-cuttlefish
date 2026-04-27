@@ -15,11 +15,10 @@
 
 #include "tpm_serialize.h"
 
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
+#include <cstring>
 
 #include "absl/log/log.h"
+#include "absl/log/check.h"
 #include "tss2/tss2_mu.h"
 #include "tss2/tss2_rc.h"
 
@@ -48,7 +47,7 @@ TpmSerializable<T>::TpmSerializable(T* instance) : instance_(instance) {}
 
 template<typename T>
 size_t TpmSerializable<T>::SerializedSize() const {
-  size_t size = 0;
+  std::size_t size = 0;
   auto rc = MarshalFn<T>(instance_, nullptr, sizeof(T), &size);
   if (rc != TPM2_RC_SUCCESS) {
     LOG(ERROR) << "tss2 marshalling failed: " << Tss2_RC_Decode(rc)
@@ -60,7 +59,7 @@ size_t TpmSerializable<T>::SerializedSize() const {
 
 template<typename T>
 uint8_t* TpmSerializable<T>::Serialize(uint8_t* buf, const uint8_t* end) const {
-  size_t offset = 0;
+  std::size_t offset = 0;
   auto rc = MarshalFn<T>(instance_, buf, end - buf, &offset);
   if (rc != TPM2_RC_SUCCESS) {
     LOG(ERROR) << "tss2 marshalling failed: " << Tss2_RC_Decode(rc)
@@ -73,7 +72,7 @@ uint8_t* TpmSerializable<T>::Serialize(uint8_t* buf, const uint8_t* end) const {
 template<typename T>
 bool TpmSerializable<T>::Deserialize(
     const uint8_t** buf_ptr, const uint8_t* end) {
-  size_t offset = 0;
+  std::size_t offset = 0;
   auto rc = UnmarshalFn<T>(*buf_ptr, end - *buf_ptr, &offset, instance_);
   if (rc != TPM2_RC_SUCCESS) {
     LOG(ERROR) << "tss2 unmarshalling failed: " << Tss2_RC_Decode(rc)

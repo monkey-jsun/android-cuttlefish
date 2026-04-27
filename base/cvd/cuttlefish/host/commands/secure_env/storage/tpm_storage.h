@@ -26,8 +26,8 @@
 #include <tss2/tss2_tpm2_types.h>
 #include <json/json.h>
 
-#include "cuttlefish/host/commands/secure_env/tpm_resource_manager.h"
 #include "cuttlefish/result/result.h"
+#include "cuttlefish/host/commands/secure_env/tpm_resource_manager.h"
 
 namespace cuttlefish {
 namespace secure_env {

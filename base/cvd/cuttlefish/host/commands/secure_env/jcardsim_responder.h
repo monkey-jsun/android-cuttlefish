@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 The Android Open Source Project
+ * Copyright 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,24 @@
 
 #pragma once
 
-#include <cstddef>
-#include <string>
+#include "cuttlefish/common/libs/transport/channel_sharedfd.h"
+#include "jcardsim_interface.h"
 
 namespace cuttlefish {
+using cuttlefish::transport::ManagedMessage;
+using cuttlefish::transport::SharedFdChannel;
 
-std::string TpmCommandName(std::uint32_t command_num);
+class JcardSimResponder {
+ public:
+  JcardSimResponder(SharedFdChannel& channel,
+                    const JCardSimInterface& jcs_interface);
 
-}
+  Result<void> ProcessMessage();
+
+ private:
+  Result<ManagedMessage> ToMessage(const std::vector<uint8_t>& data);
+  SharedFdChannel& channel_;
+  const JCardSimInterface& jcs_interface_;
+};
+
+}  // namespace cuttlefish

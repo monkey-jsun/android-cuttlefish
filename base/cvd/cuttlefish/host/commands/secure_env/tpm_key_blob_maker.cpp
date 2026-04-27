@@ -17,9 +17,10 @@
 
 #include <vector>
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <tss2/tss2_mu.h>
 #include <tss2/tss2_rc.h>
-#include "absl/log/log.h"
 
 #include "cuttlefish/host/commands/secure_env/composite_serialization.h"
 #include "cuttlefish/host/commands/secure_env/encrypted_serializable.h"
@@ -73,7 +74,7 @@ static keymaster_error_t SplitEnforcedProperties(
       case KM_TAG_MAC_LENGTH:
       case KM_TAG_NONCE:
         VLOG(0) << "Tag " << entry.tag
-                << " not allowed in key generation/import";
+                   << " not allowed in key generation/import";
         break;
 
       // These are provided to support attestation key generation, but should

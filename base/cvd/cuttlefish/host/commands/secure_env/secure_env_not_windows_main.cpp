@@ -15,8 +15,11 @@
 
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <thread>
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <fruit/fruit.h>
 #include <gflags/gflags.h>
 #include <keymaster/android_keymaster.h>
@@ -24,8 +27,6 @@
 #include <keymaster/soft_keymaster_logger.h>
 #include <tss2/tss2_esys.h>
 #include <tss2/tss2_rc.h>
-#include "absl/log/check.h"
-#include "absl/log/log.h"
 
 #include "cuttlefish/common/libs/fs/shared_fd.h"
 #include "cuttlefish/common/libs/security/confui_sign.h"
@@ -38,6 +39,8 @@
 #include "cuttlefish/host/commands/secure_env/device_tpm.h"
 #include "cuttlefish/host/commands/secure_env/gatekeeper_responder.h"
 #include "cuttlefish/host/commands/secure_env/in_process_tpm.h"
+#include "cuttlefish/host/commands/secure_env/jcardsim_interface.h"
+#include "cuttlefish/host/commands/secure_env/jcardsim_responder.h"
 #include "cuttlefish/host/commands/secure_env/keymaster_responder.h"
 #include "cuttlefish/host/commands/secure_env/oemlock/oemlock.h"
 #include "cuttlefish/host/commands/secure_env/oemlock/oemlock_responder.h"
@@ -86,6 +89,10 @@ DEFINE_string(gatekeeper_impl, "tpm",
 DEFINE_string(oemlock_impl, "tpm",
               "The oemlock implementation. \"tpm\" or \"software\"");
 
+DEFINE_int32(jcardsim_fd_in, -1, "A pipe for jcardsim communication");
+DEFINE_int32(jcardsim_fd_out, -1, "A pipe for jcardsim communication");
+DEFINE_bool(enable_jcard_simulator, false, "Whether to enable jcardsimulator.");
+
 namespace cuttlefish {
 namespace {
 
@@ -126,7 +133,7 @@ std::thread StartKernelEventMonitor(SharedFD kernel_events_fd,
   return std::thread([kernel_events_fd, &oemlock_lock]() {
     while (kernel_events_fd->IsOpen()) {
       auto read_result = monitor::ReadEvent(kernel_events_fd);
-      CHECK(read_result.ok()) << read_result.error();
+      CHECK(read_result.ok()) << read_result.error().FormatForEnv();
       CHECK(read_result->has_value()) << "EOF in kernel log monitor";
       if ((*read_result)->event == monitor::Event::BootloaderLoaded) {
         VLOG(0) << "secure_env detected guest reboot, restarting.";
@@ -264,6 +271,12 @@ Result<void> SecureEnvMain(int argc, char** argv) {
   oemlock::OemLock* oemlock = injector.get<oemlock::OemLock*>();
   keymaster::KeymasterEnforcement* keymaster_enforcement =
       injector.get<keymaster::KeymasterEnforcement*>();
+  std::unique_ptr<JCardSimInterface> jcs_interface = nullptr;
+  bool enable_jcard_simulator = FLAGS_enable_jcard_simulator;
+  if (enable_jcard_simulator) {
+    jcs_interface = CF_EXPECT(JCardSimInterface::Create(),
+                              "Failed to initialize JCardSimulator");
+  }
   std::unique_ptr<keymaster::KeymasterContext> keymaster_context;
   std::unique_ptr<keymaster::AndroidKeymaster> keymaster;
   std::timed_mutex oemlock_lock;
@@ -287,6 +300,15 @@ Result<void> SecureEnvMain(int argc, char** argv) {
       CF_EXPECT(SharedFD::SocketPair(AF_UNIX, SOCK_STREAM, 0));
   auto [oemlock_snapshot_socket1, oemlock_snapshot_socket2] =
       CF_EXPECT(SharedFD::SocketPair(AF_UNIX, SOCK_STREAM, 0));
+  // jcardsim snapshot
+  std::optional<SharedFD> jcardsim_snapshot_socket1 = std::nullopt;
+  std::optional<SharedFD> jcardsim_snapshot_socket2 = std::nullopt;
+  if (enable_jcard_simulator) {
+    std::pair<SharedFD, SharedFD> jcardsim_snapshots =
+        CF_EXPECT(SharedFD::SocketPair(AF_UNIX, SOCK_STREAM, 0));
+    jcardsim_snapshot_socket1 = jcardsim_snapshots.first;
+    jcardsim_snapshot_socket2 = jcardsim_snapshots.second;
+  }
   SharedFD channel_to_run_cvd = DupFdFlag(FLAGS_snapshot_control_fd);
 
   SnapshotCommandHandler suspend_resume_handler(
@@ -296,6 +318,7 @@ Result<void> SecureEnvMain(int argc, char** argv) {
           .keymaster = std::move(keymaster_snapshot_socket1),
           .gatekeeper = std::move(gatekeeper_snapshot_socket1),
           .oemlock = std::move(oemlock_snapshot_socket1),
+          .jcardsim = std::move(jcardsim_snapshot_socket1),
       });
 
   // The guest image may have either the C++ implementation of
@@ -412,6 +435,32 @@ Result<void> SecureEnvMain(int argc, char** argv) {
           }
         }
       });
+  if (enable_jcard_simulator) {
+    auto jcardsim_in = DupFdFlag(FLAGS_jcardsim_fd_in);
+    auto jcardsim_out = DupFdFlag(FLAGS_jcardsim_fd_out);
+    threads.emplace_back([jcardsim_in, jcardsim_out,
+                          jcs_interface = std::move(jcs_interface),
+                          jcardsim_snapshot_socket2 =
+                              std::move(jcardsim_snapshot_socket2.value())]() {
+      while (true) {
+        SharedFdChannel jcardsim_channel(jcardsim_in, jcardsim_out);
+
+        JcardSimResponder jcardsim_responder(jcardsim_channel,
+                                             *jcs_interface.get());
+
+        std::function<bool()> jcardsim_process_cb = [&jcardsim_responder]() {
+          return (jcardsim_responder.ProcessMessage().ok());
+        };
+
+        // infinite loop that returns if resetting responder is needed
+        auto result = secure_env_impl::WorkerInnerLoop(
+            jcardsim_process_cb, jcardsim_in, jcardsim_snapshot_socket2);
+        if (!result.ok()) {
+          LOG(FATAL) << "jcardsim worker failed: " << result.error().Trace();
+        }
+      }
+    });
+  }
 
   auto confui_server_fd = DupFdFlag(FLAGS_confui_server_fd);
   threads.emplace_back([confui_server_fd, resource_manager]() {

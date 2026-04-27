@@ -15,8 +15,9 @@
 
 #include "keymaster_responder.h"
 
-#include <keymaster/android_keymaster_messages.h>
 #include "absl/log/log.h"
+#include "absl/log/check.h"
+#include <keymaster/android_keymaster_messages.h>
 
 namespace cuttlefish {
 

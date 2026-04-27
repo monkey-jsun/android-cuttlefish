@@ -15,8 +15,9 @@
 
 #include "gatekeeper_responder.h"
 
-#include <gatekeeper/gatekeeper_messages.h>
 #include "absl/log/log.h"
+#include "absl/log/check.h"
+#include <gatekeeper/gatekeeper_messages.h>
 
 namespace cuttlefish {
 

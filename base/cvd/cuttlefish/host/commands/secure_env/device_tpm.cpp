@@ -15,10 +15,11 @@
 
 #include "cuttlefish/host/commands/secure_env/device_tpm.h"
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <tss2/tss2_rc.h>
 #include <tss2/tss2_tcti.h>
 #include <tss2/tss2_tcti_device.h>
-#include "absl/log/log.h"
 
 namespace cuttlefish {
 

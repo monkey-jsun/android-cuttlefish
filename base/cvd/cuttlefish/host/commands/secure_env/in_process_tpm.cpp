@@ -21,8 +21,6 @@
 #include <tss2/tss2_rc.h>
 
 #include <android-base/endian.h>
-#include "absl/log/check.h"
-#include "absl/log/log.h"
 
 #include "cuttlefish/host/commands/secure_env/tpm_commands.h"
 
@@ -44,6 +42,7 @@ typedef int SOCKET;
 }
 
 #include "absl/log/log.h"
+#include "absl/log/check.h"
 
 #include <mutex>
 
@@ -89,7 +88,7 @@ class InProcessTpm::Impl {
     }
     auto header = reinterpret_cast<tpm_message_header*>(request.data());
     VLOG(1) << "Sending TPM command "
-            << TpmCommandName(be32toh(header->ordinal));
+                << TpmCommandName(be32toh(header->ordinal));
     _IN_BUFFER input = {
         .BufferSize = static_cast<unsigned long>(request.size()),
         .Buffer = request.data(),
@@ -102,8 +101,8 @@ class InProcessTpm::Impl {
     *size = output.BufferSize;
     header = reinterpret_cast<tpm_message_header*>(response);
     auto rc = be32toh(header->ordinal);
-    VLOG(1) << "Received TPM response " << Tss2_RC_Decode(rc) << " (" << rc
-            << ")";
+    VLOG(1) << "Received TPM response " << Tss2_RC_Decode(rc)
+                << " (" << rc << ")";
     return TSS2_RC_SUCCESS;
   }
 

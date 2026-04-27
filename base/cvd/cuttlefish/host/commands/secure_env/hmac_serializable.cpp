@@ -15,9 +15,10 @@
 
 #include "hmac_serializable.h"
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <optional>
 #include <vector>
-#include "absl/log/log.h"
 
 #include "cuttlefish/host/commands/secure_env/tpm_auth.h"
 #include "cuttlefish/host/commands/secure_env/tpm_hmac.h"

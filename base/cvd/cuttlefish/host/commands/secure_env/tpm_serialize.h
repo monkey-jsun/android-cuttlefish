@@ -22,6 +22,9 @@
 #include "tss2/tss2_rc.h"
 #include "tss2/tss2_tpm2_types.h"
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
+
 namespace cuttlefish {
 
 /**

@@ -18,13 +18,14 @@
 #include <cassert>
 #include <optional>
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <keymaster/cppcose/cppcose.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>
 #include <openssl/hkdf.h>
 #include <openssl/rand.h>
-#include "absl/log/log.h"
 
 #include "cuttlefish/host/commands/secure_env/primary_key_builder.h"
 #include "cuttlefish/host/commands/secure_env/tpm_hmac.h"

@@ -18,8 +18,8 @@
 #include <thread>
 
 #include "cuttlefish/common/libs/fs/shared_fd.h"
-#include "cuttlefish/host/libs/command_util/runner/defs.h"
 #include "cuttlefish/result/result.h"
+#include "cuttlefish/host/libs/command_util/runner/defs.h"
 
 namespace cuttlefish {
 
@@ -59,6 +59,9 @@ class SnapshotCommandHandler {
     SharedFD keymaster;
     SharedFD gatekeeper;
     SharedFD oemlock;
+    // The jcardsim is optional. It is only required if
+    // FLAGS_enable_jcard_simulator is enabled.
+    std::optional<SharedFD> jcardsim;
   };
 
   ~SnapshotCommandHandler();

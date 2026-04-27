@@ -20,6 +20,9 @@
 
 #include <openssl/rand.h>
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
+
 namespace cuttlefish {
 
 namespace {

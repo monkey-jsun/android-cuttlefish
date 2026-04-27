@@ -19,9 +19,9 @@
 #include <cstring>
 #include <vector>
 
-#include <tss2/tss2_rc.h>
-#include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/log/check.h"
+#include <tss2/tss2_rc.h>
 
 namespace cuttlefish {
 

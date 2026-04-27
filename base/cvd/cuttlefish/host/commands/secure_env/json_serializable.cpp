@@ -17,8 +17,9 @@
 
 #include <fstream>
 
-#include <keymaster/serializable.h>
 #include "absl/log/log.h"
+#include "absl/log/check.h"
+#include <keymaster/serializable.h>
 
 #include "cuttlefish/host/commands/secure_env/encrypted_serializable.h"
 #include "cuttlefish/host/commands/secure_env/hmac_serializable.h"

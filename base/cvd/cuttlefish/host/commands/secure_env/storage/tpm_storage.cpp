@@ -15,8 +15,9 @@
 
 #include "cuttlefish/host/commands/secure_env/storage/tpm_storage.h"
 
-#include <tss2/tss2_rc.h>
 #include "absl/log/log.h"
+#include "absl/log/check.h"
+#include <tss2/tss2_rc.h>
 
 #include "cuttlefish/host/commands/secure_env/json_serializable.h"
 #include "cuttlefish/host/commands/secure_env/tpm_random_source.h"
@@ -210,7 +211,7 @@ Result<void> TpmStorage::Allocate(const std::string& key, uint16_t size) {
       break;
     } else {
       VLOG(0) << "Esys_NV_DefineSpace failed with " << rc << ": "
-              << Tss2_RC_Decode(rc);
+                 << Tss2_RC_Decode(rc);
     }
   }
   Json::Value entry(Json::objectValue);

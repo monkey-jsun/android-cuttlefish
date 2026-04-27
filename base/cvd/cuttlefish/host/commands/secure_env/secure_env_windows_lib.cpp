@@ -19,9 +19,10 @@
 
 #include <thread>
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <keymaster/android_keymaster.h>
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
-#include "absl/log/log.h"
 #include "cuttlefish/common/libs/security/gatekeeper_channel_windows.h"
 #include "cuttlefish/common/libs/security/keymaster_channel_windows.h"
 #include "cuttlefish/host/commands/secure_env/gatekeeper_responder.h"

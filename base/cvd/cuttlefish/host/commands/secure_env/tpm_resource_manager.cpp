@@ -17,9 +17,10 @@
 
 #include <mutex>
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <tss2/tss2_esys.h>
 #include <tss2/tss2_rc.h>
-#include "absl/log/log.h"
 
 namespace cuttlefish {
 

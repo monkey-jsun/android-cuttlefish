@@ -15,9 +15,10 @@
 
 #include "cuttlefish/host/commands/secure_env/primary_key_builder.h"
 
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <tss2/tss2_mu.h>
 #include <tss2/tss2_rc.h>
-#include "absl/log/log.h"
 
 namespace cuttlefish {
 

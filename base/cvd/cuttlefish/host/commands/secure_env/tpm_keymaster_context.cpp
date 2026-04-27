@@ -15,13 +15,8 @@
 
 #include "tpm_keymaster_context.h"
 
-#include <stdint.h>
-
-#include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
-
+#include "absl/log/log.h"
+#include "absl/log/check.h"
 #include <keymaster/contexts/soft_attestation_cert.h>
 #include <keymaster/km_openssl/aes_key.h>
 #include <keymaster/km_openssl/asymmetric_key.h>
@@ -34,8 +29,6 @@
 #include <keymaster/km_openssl/triple_des_key.h>
 #include <keymaster/operation.h>
 #include <keymaster/wrapped_key.h>
-#include "absl/log/check.h"
-#include "absl/log/log.h"
 
 #include "cuttlefish/host/commands/secure_env/primary_key_builder.h"
 #include "cuttlefish/host/commands/secure_env/tpm_attestation_record.h"
@@ -582,7 +575,7 @@ keymaster_error_t TpmKeymasterContext::UnwrapKey(
 }
 
 keymaster_error_t TpmKeymasterContext::CheckConfirmationToken(
-    const uint8_t* input_data, size_t input_data_size,
+    const std::uint8_t* input_data, size_t input_data_size,
     const uint8_t confirmation_token[keymaster::kConfirmationTokenSize]) const {
   auto hmac = TpmHmacWithContext(resource_manager_, "confirmation_token",
                                  input_data, input_data_size);
@@ -595,7 +588,8 @@ keymaster_error_t TpmKeymasterContext::CheckConfirmationToken(
       << "Hmac size for confirmation UI must be "
       << keymaster::kConfirmationTokenSize;
 
-  std::vector<uint8_t> hmac_buffer(hmac->buffer, hmac->buffer + hmac->size);
+  std::vector<std::uint8_t> hmac_buffer(hmac->buffer,
+                                        hmac->buffer + hmac->size);
 
   const auto is_equal =
       std::equal(hmac_buffer.cbegin(), hmac_buffer.cend(), confirmation_token);
