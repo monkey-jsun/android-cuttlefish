@@ -98,7 +98,7 @@ if [ ! -x "${CARGO_BAZEL_BIN}" ]; then
   pushd "$tmpdir"
   wget -q "https://github.com/bazelbuild/rules_rust/archive/refs/tags/${RULES_RUST_VERSION}.tar.gz"
   tar xzf "${RULES_RUST_VERSION}.tar.gz"
-  cargo install --path "rules_rust-${RULES_RUST_VERSION}/crate_universe" \
+  cargo install --locked --path "rules_rust-${RULES_RUST_VERSION}/crate_universe" \
     --root "${CARGO_BAZEL_DIR}"
   popd
   echo "cargo-bazel installed to ${CARGO_BAZEL_BIN}"
