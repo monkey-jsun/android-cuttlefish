@@ -135,11 +135,31 @@ else
 fi
 
 CARGO_BAZEL_SHA256="$(sha256sum "${CARGO_BAZEL_BIN}" | cut -d' ' -f1)"
+
+# Persist the cargo-bazel env vars in the calling user's ~/.bashrc so new
+# interactive shells (and hence build_packages.sh -> debuild on riscv64) pick
+# them up automatically.  debian/rules on riscv64 hard-requires
+# CARGO_BAZEL_GENERATOR_URL; without this every user has to copy the export
+# lines from this script's stdout, and the failure mode -- a cryptic
+# "*** riscv64 requires CARGO_BAZEL_GENERATOR_URL" from debuild -- is opaque.
+# Wrapped in a marker block so re-runs (e.g. after a rules_rust bump) replace
+# the previous block instead of appending duplicates.
+BASHRC="${HOME}/.bashrc"
+touch "${BASHRC}"
+sed -i '/# >>> cargo-bazel env (managed by setup-riscv64-host.sh) >>>/,/# <<< cargo-bazel env <<</d' "${BASHRC}"
+cat >> "${BASHRC}" <<EOF
+# >>> cargo-bazel env (managed by setup-riscv64-host.sh) >>>
+# riscv64 has no prebuilt cargo-bazel; this points at the local build.
+export CARGO_BAZEL_GENERATOR_URL="file://${CARGO_BAZEL_BIN}"
+export CARGO_BAZEL_GENERATOR_SHA256="${CARGO_BAZEL_SHA256}"
+# <<< cargo-bazel env <<<
+EOF
+
 echo ""
 echo "riscv64 host setup complete."
 echo ""
-echo "Before building, set the cargo-bazel environment variables:"
-echo "  export CARGO_BAZEL_GENERATOR_URL=\"file://${CARGO_BAZEL_BIN}\""
-echo "  export CARGO_BAZEL_GENERATOR_SHA256=\"${CARGO_BAZEL_SHA256}\""
-
+echo "cargo-bazel env vars appended to ${BASHRC}; they load in any new"
+echo "interactive shell.  To use them in *this* shell right now:"
+echo "  source ${BASHRC}"
+echo ""
 echo "All done!"
