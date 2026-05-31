@@ -1,0 +1,42 @@
+From: dev-cuttlefish <noreply@junsun.net>
+Subject: [PATCH] backend/grpc_client: drop unused file-scope ClientContext
+
+src/backend/grpc_client.cc declares `grpc::ClientContext context_;` at
+file scope but never reads or writes it -- the per-call contexts live in
+`contexts_` (an std::unordered_map keyed by stream_id). The dead static
+is still default-constructed at program startup, which on platforms
+where libgrpc is statically linked (riscv64 cuttlefish-base .deb build)
+runs grpc::ClientContext::ClientContext() before grpc's own static
+initializer (_GLOBAL__sub_I_client_context.cc) has had a chance to set
+grpc::g_client_callbacks. Result: SIGSEGV at +252 in ClientContext's
+ctor while dereferencing a NULL g_client_callbacks.
+
+On amd64/aarch64 AOSP builds this works because libgrpc++ is a shared
+library; its .init_array runs during DSO load, before _start invokes
+the application's own static initializers. With the static-linked
+riscv64 build, both initializer sets are concatenated into one
+.init_array and ordering between TUs from different libraries is
+unspecified -- netsim's TU happens to land at position 12 while
+grpc's lands at position 25.
+
+The static is dead code; deleting it removes the dependency entirely.
+
+(See also the alwayslink patch to grpc's bazel/grpc_build_system.bzl
+which ensures grpc's static initializer is preserved in the link --
+needed so that later (post-main) ClientContext constructions in the
+same binary do not also crash on a NULL g_client_callbacks.)
+---
+ src/backend/grpc_client.cc | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/backend/grpc_client.cc b/src/backend/grpc_client.cc
+--- a/src/backend/grpc_client.cc
++++ b/src/backend/grpc_client.cc
+@@ -53,7 +53,6 @@ std::unordered_map<uint32_t, grpc::ClientContext> contexts_;
+ // Single connection to a server with multiple StreamPackets calls
+ std::string server_;
+ std::shared_ptr<grpc::Channel> channel_;
+-grpc::ClientContext context_;
+ std::unique_ptr<netsim::packet::PacketStreamer::Stub> stub_;
+
+ // Call the StreamPackets RPC on server.
