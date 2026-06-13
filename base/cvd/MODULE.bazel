@@ -136,6 +136,28 @@ perl_riscv64(
 
 register_toolchains("//toolchain:perl_linux_riscv64_toolchain")
 
+# riscv64: external prebuilts pulled into the cvd_host_package_riscv64 tarball
+# via http_file repos.  Released on monkey-jsun GH forks and pinned by sha256
+# for reproducibility.  Triple-repo cf-k3-vX.Y coherence: bumping these to a
+# new cf-k3-vX.Y tag means bumping all three of crosvm, u-boot, and
+# android-cuttlefish in lockstep.
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+http_file(
+    name = "crosvm_riscv64",
+    urls = ["https://github.com/monkey-jsun/crosvm/releases/download/cf-k3-v1.0/crosvm-cf-k3-v1.0"],
+    sha256 = "c8ed8ea173df7fab10e03bd570ef9dadd81d6035e2a13c163fb530f30634a0e9",
+    executable = True,
+    downloaded_file_path = "crosvm",
+)
+
+http_file(
+    name = "uboot_riscv64_crosvm",
+    urls = ["https://github.com/monkey-jsun/u-boot/releases/download/cf-k3-v1.0/u-boot-cf-k3-v1.0.bin"],
+    sha256 = "c21811512d503b24e3ce5d1d6b09e45690eefa9f9dfd46c0eea858eb3906b18a",
+    downloaded_file_path = "u-boot.bin",
+)
+
 # riscv64: openssl 3.3.1.bcr.1 overlay does not include riscv64 constants.
 # Use a patched overlay tarball that adds constants-linux-riscv64.bzl.
 # Also patch BUILD.bazel to add riscv64 to all select() blocks.

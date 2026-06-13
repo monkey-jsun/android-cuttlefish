@@ -1,0 +1,83 @@
+# Builds cvd_host_package_riscv64.tar.gz -- the riscv64 equivalent of AOSP's
+# cvd_host_package.tar.gz, assembled from this repo's bazel tree (AOSP does
+# not produce a riscv64 variant).
+#
+# Strategy: extract cuttlefish-base_*_riscv64.deb (built separately by
+# debuild) for the bulk of the contents, overlay secure_env from bazel,
+# crosvm / u-boot prebuilts from http_file repos, and static AOSP-derived
+# configs from this package's configs/.
+#
+# The .deb file is NOT a bazel-tracked input -- it's produced by debuild
+# (not bazel) and lives outside the bazel workspace.  The genrule looks it
+# up in the source tree at action time and fails if absent.  Build order:
+#
+#   tools/buildutils/build_package.sh base    # produces cuttlefish-base*.deb
+#   tools/buildutils/cf-bazel-build.sh \
+#       //cuttlefish/package/cvd_host_riscv64:cvd_host_package_riscv64
+
+genrule(
+    name = "cvd_host_package_riscv64",
+    srcs = [
+        "@crosvm_riscv64//file",
+        "@uboot_riscv64_crosvm//file",
+        "//cuttlefish/host/commands/secure_env:secure_env",
+    ] + glob(["configs/**/*"]),
+    outs = ["cvd_host_package_riscv64.tar.gz"],
+    cmd = """\
+set -eu
+
+# Locate cuttlefish-base*.deb at the source tree root.  The deb is built by
+# debuild (not by bazel) and lives at <repo>/base/.  This genrule's CWD is
+# the bazel execroot; the source tree root is at $$PWD/../../../base.
+DEB_DIR=$$PWD/../../../base
+DEB=$$(ls $$DEB_DIR/cuttlefish-base_*_riscv64.deb 2>/dev/null | head -1)
+if [ -z "$$DEB" ]; then
+    echo "ERROR: cuttlefish-base_*_riscv64.deb not present at $$DEB_DIR" >&2
+    echo "       Run tools/buildutils/build_package.sh base first." >&2
+    exit 1
+fi
+
+STAGE=$$(mktemp -d)
+trap 'rm -rf "$$STAGE"' EXIT
+
+# Extract the deb.  Its contents live under /usr/lib/cuttlefish-common/ in
+# the deb's layout; the cvd-host tarball wants them at the root, so flatten.
+DEB_EXTRACT=$$(mktemp -d)
+dpkg-deb -x "$$DEB" "$$DEB_EXTRACT"
+cp -a "$$DEB_EXTRACT/usr/lib/cuttlefish-common/." "$$STAGE/"
+rm -rf "$$DEB_EXTRACT"
+
+# Overlay secure_env.  The deb omits it (file_to_src entry commented out
+# as a schuffelen-TODO upstream); cvd-host needs it.  Deb binaries are
+# stripped by dh_strip; strip ours to match.
+cp $(execpath //cuttlefish/host/commands/secure_env:secure_env) "$$STAGE/bin/secure_env"
+chmod +x "$$STAGE/bin/secure_env"
+strip --strip-unneeded "$$STAGE/bin/secure_env" 2>/dev/null || :
+
+# Overlay external prebuilts.
+cp $(execpath @crosvm_riscv64//file) "$$STAGE/bin/crosvm"
+chmod +x "$$STAGE/bin/crosvm"
+mkdir -p "$$STAGE/etc/bootloader_riscv64"
+cp $(execpath @uboot_riscv64_crosvm//file) "$$STAGE/etc/bootloader_riscv64/bootloader.crosvm"
+
+# Overlay static AOSP-derived configs from this package's configs/ dir.
+CFG=cuttlefish/package/cvd_host_riscv64/configs
+cp $$CFG/cvd_avb_testkey_rsa2048.pem "$$STAGE/etc/"
+cp $$CFG/cvd_avb_testkey_rsa4096.pem "$$STAGE/etc/"
+cp $$CFG/cvd_rsa2048.avbpubkey "$$STAGE/etc/"
+cp $$CFG/cvd_rsa4096.avbpubkey "$$STAGE/etc/"
+mkdir -p "$$STAGE/etc/cvd_config"
+cp $$CFG/cvd_config/*.json "$$STAGE/etc/cvd_config/"
+
+# AOSP-compatible symlink names.
+(cd "$$STAGE/bin" && \\
+ ln -sf cvd_internal_start launch_cvd && \\
+ ln -sf cvd_internal_stop  stop_cvd && \\
+ ln -sf cvd_internal_status cvd_status)
+
+tar czf $(OUTS) -C "$$STAGE" .
+""",
+    local = True,
+    tags = ["no-cache"],
+    visibility = ["//:android_cuttlefish"],
+)
