@@ -42,6 +42,17 @@ for f in $(dpkg-buildflags --get CXXFLAGS); do CXX+=(--cxxopt="$f"); done
 for f in $(dpkg-buildflags --get LDFLAGS);  do LDX+=(--linkopt="$f"); done
 LDX+=(--linkopt=-Wl,--build-id=sha1)
 
+# Locate cuttlefish-base*.deb at the repo root if present, and pass its
+# absolute path to bazel actions via --action_env.  The cvd_host_riscv64
+# tarball target reads CF_DEB_PATH from its environment; targets that don't
+# care about the deb just ignore it.  (debuild writes its .deb outputs
+# at the parent of the source-package directory, i.e. <repo>/, not <repo>/base/.)
+ACTION_ENV=()
+DEB_PATH=$(ls "$REPO_ROOT"/cuttlefish-base_*_riscv64.deb 2>/dev/null | head -1)
+if [ -n "$DEB_PATH" ]; then
+    ACTION_ENV+=(--action_env=CF_DEB_PATH="$(readlink -f "$DEB_PATH")")
+fi
+
 cd "$REPO_ROOT/base/cvd"
 
 exec bazel build \
@@ -52,4 +63,5 @@ exec bazel build \
     --workspace_status_command=../stamp_helper.sh \
     --build_tag_filters=-clang-tidy \
     "${CONLY[@]}" "${CXX[@]}" "${LDX[@]}" \
+    "${ACTION_ENV[@]}" \
     "$@"

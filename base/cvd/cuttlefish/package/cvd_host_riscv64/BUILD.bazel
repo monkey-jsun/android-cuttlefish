@@ -26,13 +26,14 @@ genrule(
     cmd = """\
 set -eu
 
-# Locate cuttlefish-base*.deb at the source tree root.  The deb is built by
-# debuild (not by bazel) and lives at <repo>/base/.  This genrule's CWD is
-# the bazel execroot; the source tree root is at $$PWD/../../../base.
-DEB_DIR=$$PWD/../../../base
-DEB=$$(ls $$DEB_DIR/cuttlefish-base_*_riscv64.deb 2>/dev/null | head -1)
-if [ -z "$$DEB" ]; then
-    echo "ERROR: cuttlefish-base_*_riscv64.deb not present at $$DEB_DIR" >&2
+# The deb is built by debuild (not by bazel) and lives at <repo>/base/.
+# cf-bazel-build.sh locates it and passes its absolute path via
+# --action_env=CF_DEB_PATH.  We can't compute it here because the genrule
+# runs from the bazel execroot (~/.cache/bazel/.../execroot/_main/), which
+# has no relative path to the source tree's base/.
+DEB="$${CF_DEB_PATH:-}"
+if [ -z "$$DEB" ] || [ ! -f "$$DEB" ]; then
+    echo "ERROR: cuttlefish-base_*_riscv64.deb not found (CF_DEB_PATH=$$DEB)" >&2
     echo "       Run tools/buildutils/build_package.sh base first." >&2
     exit 1
 fi
@@ -76,6 +77,10 @@ cp $$CFG/cvd_config/*.json "$$STAGE/etc/cvd_config/"
  ln -sf cvd_internal_status cvd_status)
 
 tar czf $(OUTS) -C "$$STAGE" .
+
+# Also place the tarball alongside the deb for convenient distribution.
+# `dirname $$CF_DEB_PATH` is base/ in the source tree.
+install -m 644 $(OUTS) "$$(dirname "$$CF_DEB_PATH")/"
 """,
     local = True,
     tags = ["no-cache"],
