@@ -1,5 +1,9 @@
 # riscv64 build container for android-cuttlefish.
 #
+# Produces an image that builds cuttlefish-base*.deb and
+# cvd_host_package_riscv64.tar.gz.  Used by
+# tools/buildutils/build-cf-riscv64.sh.
+#
 # debian:trixie is used because debian:bookworm does not support riscv64.
 # Trixie (Debian 13) is the first Debian release with official riscv64.
 # clang-19 (19.1.7) in trixie matches the hermetic LLVM 19.1.7 used by
@@ -9,8 +13,14 @@
 # RISCV_FLUSH_ICACHE syscall needed by the JVM on riscv64.  Configure:
 #   echo '{"seccomp-profile": "unconfined"}' | sudo tee /etc/docker/daemon.json
 #   sudo systemctl restart docker
+#
+# Runtime user: this image has no baked-in user.  The build script runs
+# the container with `--user $(id -u):$(id -g)` and bind-mounts the
+# host's /etc/passwd + /etc/group so the runtime process is recognized as
+# the calling host user.  Files written into bind mounts land owned by
+# the caller on the host.
 
-FROM debian:trixie AS base
+FROM debian:trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -75,7 +85,8 @@ RUN tmpdir="$(mktemp -d)" && \
 # Build cargo-bazel from the rules_rust source tree.  The crates.io
 # "cargo-bazel" package is NOT the same binary -- it lacks flags like
 # --repository-name that rules_rust expects.  Must build from the matching
-# rules_rust release tag.
+# rules_rust release tag.  Installed system-wide so the env var below
+# works regardless of which user runs the container.
 ARG RULES_RUST_VERSION=0.68.1
 RUN tmpdir="$(mktemp -d)" && \
     cd "$tmpdir" && \
@@ -86,5 +97,3 @@ RUN tmpdir="$(mktemp -d)" && \
     cd / && rm -rf "$tmpdir"
 
 ENV CARGO_BAZEL_GENERATOR_URL=file:///usr/local/bin/cargo-bazel
-
-ENTRYPOINT ["tools/buildutils/cw/entrypoint.sh"]
