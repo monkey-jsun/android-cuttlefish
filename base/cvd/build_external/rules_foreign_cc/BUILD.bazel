@@ -1,0 +1,5 @@
+package(
+    default_visibility = [
+        "@rules_foreign_cc//:__subpackages__",
+    ],
+)
