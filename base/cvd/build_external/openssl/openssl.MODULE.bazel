@@ -1,0 +1,17 @@
+# riscv64: openssl 3.3.1.bcr.1 ships no riscv64 platform constants and
+# its bazel build rules don't include riscv64 in their select() tables.
+# Two patches:
+#
+#   riscv64_overlay.patch            Adds constants-linux-riscv64.bzl to
+#                                    the overlay so the platform loads.
+#   openssl_riscv64_def_hdrs.patch   Adds a riscv64 branch to BUILD.bazel
+#                                    select() blocks gating per-arch
+#                                    headers.
+single_version_override(
+    module_name = "openssl",
+    patches = [
+        "@//build_external/openssl:riscv64_overlay.patch",
+        "@//build_external/openssl:openssl_riscv64_def_hdrs.patch",
+    ],
+    patch_strip = 1,
+)

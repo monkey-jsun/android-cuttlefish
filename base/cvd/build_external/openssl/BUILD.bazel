@@ -1,0 +1,5 @@
+package(
+    default_visibility = [
+        "@openssl//:__subpackages__",
+    ],
+)
