@@ -1,0 +1,122 @@
+# riscv64 build container for android-cuttlefish.
+#
+# Riscv64 Debian trixie -- runs natively on a riscv64 host and under
+# qemu-user binfmt emulation on a non-riscv64 host.  bazel and clang
+# execute as riscv64 ELF either way, so this is a "native" build from
+# bazel's perspective (no cross-compile).
+#
+# Used by tools/buildutils/build-cf-riscv64.sh to produce
+# cuttlefish-base*.deb and cvd_host_package_riscv64.tar.gz.
+#
+# trixie / Debian 13 is the first Debian release with official riscv64;
+# bookworm doesn't support it.  clang-19 (19.1.7) in trixie matches the
+# hermetic LLVM 19.1.7 used by amd64/arm64 via toolchains_llvm.
+#
+# Host requirement on non-riscv64 hosts: qemu-user binfmt for riscv64
+# must be registered with the 'C' flag, or sudo and other setuid
+# binaries inside the container fail to elevate.  The build script
+# checks this before starting.
+#
+# The entrypoint (entrypoint-riscv64.sh) creates a user matching the
+# host caller's UID/GID/name at container start and drops privileges via
+# gosu.  Files written into bind mounts come out owned by the caller.
+#
+# Package set mirrors rv-build's apt-marked manual set (38 packages,
+# minus cuttlefish-common-build-deps which mk-build-deps generates),
+# plus gosu for the entrypoint.
+
+FROM riscv64/debian:trixie
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update -y && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+      bc \
+      bison \
+      build-essential \
+      cargo \
+      clang-19 \
+      config-package-dev \
+      curl \
+      debhelper \
+      device-tree-compiler \
+      devscripts \
+      equivs \
+      flex \
+      gfortran \
+      git \
+      gosu \
+      htop \
+      libc++-19-dev \
+      libc++abi-19-dev \
+      libcap-dev \
+      libclang-rt-19-dev \
+      libdrm-dev \
+      libepoxy-dev \
+      libwayland-dev \
+      lld-19 \
+      openjdk-21-jdk \
+      pkg-config \
+      protobuf-compiler \
+      python3 \
+      python3-dev \
+      python3-setuptools \
+      rustc \
+      sudo \
+      swig \
+      unzip \
+      vim \
+      wayland-protocols \
+      wget \
+      zip
+
+# Bridge Debian's legacy clang-rt layout to the per-target layout that
+# toolchains_llvm expects.  Same logic as setup-riscv64-host.sh.
+RUN LEGACY_RT="/usr/lib/llvm-19/lib/clang/19/lib/linux/libclang_rt.builtins-riscv64.a" && \
+    TARGET_DIR="/usr/lib/llvm-19/lib/clang/19/lib/riscv64-unknown-linux-gnu" && \
+    TARGET_RT="${TARGET_DIR}/libclang_rt.builtins.a" && \
+    if [ -f "$LEGACY_RT" ] && [ ! -e "$TARGET_RT" ]; then \
+      mkdir -p "$TARGET_DIR" && ln -sf "$LEGACY_RT" "$TARGET_RT"; \
+    fi
+
+# Build Bazel from source -- no prebuilt riscv64 binary upstream.  The
+# sed patch defends against a locale-dependent sort/comm mismatch in
+# scripts/bootstrap/compile.sh (same fix as setup-riscv64-host.sh).
+ARG BAZEL_VERSION=8.5.1
+RUN tmpdir="$(mktemp -d)" && \
+    cd "$tmpdir" && \
+    wget -q "https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-dist.zip" && \
+    unzip -q "bazel-${BAZEL_VERSION}-dist.zip" && \
+    sed -i \
+      -e 's#| sort >#| LC_ALL=C sort >#g' \
+      -e 's#comm -#LC_ALL=C comm -#g' \
+      scripts/bootstrap/compile.sh && \
+    env EXTRA_BAZEL_ARGS="--tool_java_runtime_version=local_jdk" bash ./compile.sh && \
+    cp output/bazel /usr/local/bin/bazel && \
+    cd / && rm -rf "$tmpdir"
+
+# Build cargo-bazel from the rules_rust source tree.  The crates.io
+# "cargo-bazel" package is NOT the same binary -- it lacks flags like
+# --repository-name that rules_rust expects.  Must build from the
+# matching rules_rust release tag.
+ARG RULES_RUST_VERSION=0.68.1
+RUN tmpdir="$(mktemp -d)" && \
+    cd "$tmpdir" && \
+    wget -q "https://github.com/bazelbuild/rules_rust/archive/refs/tags/${RULES_RUST_VERSION}.tar.gz" && \
+    tar xzf "${RULES_RUST_VERSION}.tar.gz" && \
+    cargo install --locked --path "rules_rust-${RULES_RUST_VERSION}/crate_universe" \
+      --root /usr/local && \
+    cd / && rm -rf "$tmpdir"
+
+# Write both cargo-bazel env vars (URL + SHA256) to /etc/cargo-bazel-env.
+# debian/rules on riscv64 hard-requires CARGO_BAZEL_GENERATOR_URL.
+# Sourced by /etc/bash.bashrc for `--shell` interactive use and
+# explicitly by build-cf-riscv64.sh's bash -c block.
+RUN sha=$(sha256sum /usr/local/bin/cargo-bazel | awk '{print $1}') && \
+    printf 'export CARGO_BAZEL_GENERATOR_URL="file:///usr/local/bin/cargo-bazel"\nexport CARGO_BAZEL_GENERATOR_SHA256="%s"\n' "$sha" > /etc/cargo-bazel-env && \
+    echo '[ -r /etc/cargo-bazel-env ] && . /etc/cargo-bazel-env' >> /etc/bash.bashrc
+
+COPY entrypoint-riscv64.sh /usr/local/bin/entrypoint-riscv64.sh
+RUN chmod +x /usr/local/bin/entrypoint-riscv64.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint-riscv64.sh"]
