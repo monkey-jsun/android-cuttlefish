@@ -1,0 +1,8 @@
+# riscv64: aspect_bazel_lib's expand_template toolchain has no prebuilt
+# binary for riscv64.  Patch to add linux_riscv64 support using a locally
+# built binary at /usr/local/bin/expand_template.
+single_version_override(
+    module_name = "aspect_bazel_lib",
+    patches = ["@//build_external/aspect_bazel_lib:riscv64_expand_template.patch"],
+    patch_strip = 1,
+)

@@ -1,0 +1,5 @@
+package(
+    default_visibility = [
+        "@aspect_bazel_lib//:__subpackages__",
+    ],
+)
