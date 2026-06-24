@@ -1,0 +1,16 @@
+# riscv64: rules_perl 0.2.4 ships no riscv64 perl toolchain, and its
+# MODULE.bazel cannot be patched via single_version_override.  Instead,
+# pull rules_perl in as a normal bazel_dep, download a prebuilt
+# relocatable perl tarball, and register a local toolchain entry from
+# //toolchain:perl_linux_riscv64_toolchain.
+bazel_dep(name = "rules_perl", version = "0.2.4")
+
+perl_riscv64 = use_repo_rule("@rules_perl//perl:repo.bzl", "perl_download")
+perl_riscv64(
+    name = "perl_linux_riscv64",
+    urls = ["https://github.com/monkey-jsun/relocatable-perl-riscv/releases/download/5.42.2.0-riscv64/perl-linux-riscv64.tar.xz"],
+    sha256 = "23049b4574d76e35ec774160f6231ddae6127d1918de800c9d11eb25636e7351",
+    strip_prefix = "perl-linux-riscv64",
+)
+
+register_toolchains("//toolchain:perl_linux_riscv64_toolchain")
