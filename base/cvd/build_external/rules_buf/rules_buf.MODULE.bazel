@@ -2,8 +2,17 @@
 # amd64, ppc64le, and s390x.  buf itself ships riscv64 binaries from
 # v1.54.0 onward (github.com/bufbuild/buf releases), so the gate is just
 # missing.  Patch mirrors the existing ppc64le/s390x version-gate pattern.
+bazel_dep(name = "rules_buf", version = "0.5.2")
+
 single_version_override(
     module_name = "rules_buf",
     patches = ["@//build_external/rules_buf:riscv64_toolchain.patch"],
     patch_strip = 1,
 )
+
+# rules_buf 0.5.2's default toolchain is pinned to buf v1.47.2, which
+# predates the riscv64 binary releases.  Register an explicit buf
+# toolchain at a version that ships riscv64.
+buf = use_extension("@rules_buf//buf:extensions.bzl", "buf")
+buf.toolchains(name = "rules_buf_toolchains", version = "v1.71.0")
+use_repo(buf, "rules_buf_toolchains")
