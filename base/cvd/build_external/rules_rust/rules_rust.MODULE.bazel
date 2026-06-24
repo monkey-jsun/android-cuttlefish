@@ -1,0 +1,19 @@
+# riscv64: rules_rust 0.68.1 does not list riscv64gc in the supported
+# Linux triples used by its toolchain selection and crate_universe.
+# Two patches:
+#
+#   riscv64_triple.patch              Add riscv64gc to the supported Linux
+#                                     triples and map the riscv64 arch
+#                                     string to the riscv64gc prefix.
+#   riscv64_supported_platform.patch  Include riscv64gc-unknown-linux-gnu
+#                                     in crate_universe's default
+#                                     SUPPORTED_PLATFORM_TRIPLES so
+#                                     generated BUILD files are correct.
+single_version_override(
+    module_name = "rules_rust",
+    patches = [
+        "@//build_external/rules_rust:riscv64_triple.patch",
+        "@//build_external/rules_rust:riscv64_supported_platform.patch",
+    ],
+    patch_strip = 1,
+)
