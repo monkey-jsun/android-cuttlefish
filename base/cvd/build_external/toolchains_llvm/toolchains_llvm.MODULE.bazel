@@ -1,0 +1,14 @@
+# riscv64: toolchains_llvm 1.6.0 does not list riscv64 as a supported
+# host or target.  Three patches add it; the fourth is a generic
+# system_module_map filtering fix needed when toolchain_root is an
+# absolute path (the riscv64 path used here triggers it).
+single_version_override(
+    module_name = "toolchains_llvm",
+    patches = [
+        "@//build_external/toolchains_llvm:riscv64_common.patch",
+        "@//build_external/toolchains_llvm:riscv64_configure.patch",
+        "@//build_external/toolchains_llvm:riscv64_cc_toolchain_config.patch",
+        "@//build_external/toolchains_llvm:system_modulemap_filter.patch",
+    ],
+    patch_strip = 1,
+)
