@@ -1,0 +1,9 @@
+# rules_buf 0.5.2's toolchain.bzl rejects every cpu other than arm64,
+# amd64, ppc64le, and s390x.  buf itself ships riscv64 binaries from
+# v1.54.0 onward (github.com/bufbuild/buf releases), so the gate is just
+# missing.  Patch mirrors the existing ppc64le/s390x version-gate pattern.
+single_version_override(
+    module_name = "rules_buf",
+    patches = ["@//build_external/rules_buf:riscv64_toolchain.patch"],
+    patch_strip = 1,
+)
