@@ -12,6 +12,11 @@ single_version_override(
     patches = [
         "@//build_external/openssl:riscv64_overlay.patch",
         "@//build_external/openssl:openssl_riscv64_def_hdrs.patch",
+        # Enable perlasm assembly generation for riscv64 so openssl uses
+        # optimized routines instead of the C reference path.  Requires the
+        # //toolchain:perl_linux_riscv64_toolchain registered by
+        # //build_external/rules_perl.
+        "@//build_external/openssl:openssl_riscv64_build.patch",
     ],
     patch_strip = 1,
 )
