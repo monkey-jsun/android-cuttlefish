@@ -1,0 +1,20 @@
+Force alwayslink=1 by default in grpc_cc_library, so static initializers
+in cc files (e.g. _GLOBAL__sub_I_client_context.cc that sets
+grpc::g_client_callbacks) are preserved when grpc is statically linked
+into a Rust binary (netsim, casimir). Without this, the rules_rust link
+step drops .init_array entries from .o files that have no symbol pulled
+in directly by Rust, and ClientContext::ClientContext crashes at runtime
+with a NULL g_client_callbacks dereference on riscv64.
+---
+diff --git a/bazel/grpc_build_system.bzl b/bazel/grpc_build_system.bzl
+--- a/bazel/grpc_build_system.bzl
++++ b/bazel/grpc_build_system.bzl
+@@ -118,7 +118,7 @@ def grpc_cc_library(
+         standalone = False,  # @unused
+         testonly = False,
+         visibility = None,
+-        alwayslink = 0,
++        alwayslink = 1,
+         data = [],
+         tags = [],
+         linkopts = [],
