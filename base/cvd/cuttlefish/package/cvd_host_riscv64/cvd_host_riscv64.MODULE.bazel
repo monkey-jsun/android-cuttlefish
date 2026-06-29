@@ -7,15 +7,15 @@ http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_
 
 http_file(
     name = "crosvm_riscv64",
-    urls = ["https://github.com/monkey-jsun/crosvm/releases/download/cf-k3-v1.0/crosvm-cf-k3-v1.0"],
-    sha256 = "c8ed8ea173df7fab10e03bd570ef9dadd81d6035e2a13c163fb530f30634a0e9",
+    urls = ["https://github.com/monkey-jsun/crosvm/releases/download/cf-k3-v1.1/crosvm-cf-k3-v1.1"],
+    sha256 = "6501ca8097f2c8fadc60f7a128735c68eee6b08af7b46f9d6ae5d863ba969bc5",
     executable = True,
     downloaded_file_path = "crosvm",
 )
 
 http_file(
     name = "uboot_riscv64_crosvm",
-    urls = ["https://github.com/monkey-jsun/u-boot/releases/download/cf-k3-v1.0/u-boot-cf-k3-v1.0.bin"],
-    sha256 = "c21811512d503b24e3ce5d1d6b09e45690eefa9f9dfd46c0eea858eb3906b18a",
+    urls = ["https://github.com/monkey-jsun/u-boot/releases/download/cf-k3-v1.1/u-boot-crosvm-cf-k3-v1.1.bin"],
+    sha256 = "67086b6c955e2f2aeceee6249c9402ffd2514b4c65ef20ba7d835dcd92f3bffb",
     downloaded_file_path = "u-boot.bin",
 )
