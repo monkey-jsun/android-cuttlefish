@@ -110,23 +110,26 @@ gfxstream::expected<Ok, std::string> PopulateEglAndGlesAvailability(
   EglAvailability* eglAvailability = availability->mutable_egl();
 
   EGLDisplay display = egl.eglGetDisplay(EGL_DEFAULT_DISPLAY);
-  if (display == EGL_NO_DISPLAY) {
+  EGLint client_version_major = 0;
+  EGLint client_version_minor = 0;
+  if (display == EGL_NO_DISPLAY ||
+      egl.eglInitialize(display, &client_version_major,
+                        &client_version_minor) != EGL_TRUE) {
+    // EGL_DEFAULT_DISPLAY resolves through the platform's window system
+    // (X11/wayland). In a headless container with no window system, the
+    // default display either isn't obtainable or fails to initialize. Fall
+    // back to the surfaceless-Mesa platform (same path as `eglinfo`).
+    display = EGL_NO_DISPLAY;
     if (egl.eglGetPlatformDisplayEXT != nullptr) {
       display = egl.eglGetPlatformDisplayEXT(
           EGL_PLATFORM_SURFACELESS_MESA,
           reinterpret_cast<void*>(EGL_DEFAULT_DISPLAY), NULL);
     }
-  }
-
-  if (display == EGL_NO_DISPLAY) {
-    return gfxstream::unexpected("Failed to find display.");
-  }
-
-  EGLint client_version_major = 0;
-  EGLint client_version_minor = 0;
-  if (egl.eglInitialize(display, &client_version_major,
-                        &client_version_minor) != EGL_TRUE) {
-    return gfxstream::unexpected("Failed to initialize display.");
+    if (display == EGL_NO_DISPLAY ||
+        egl.eglInitialize(display, &client_version_major,
+                          &client_version_minor) != EGL_TRUE) {
+      return gfxstream::unexpected("Failed to initialize display.");
+    }
   }
 
   const std::string version_string = egl.eglQueryString(display, EGL_VERSION);

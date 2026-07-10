@@ -181,10 +181,13 @@ GetGpuModeRequirementsMap() {
           [](const CommonState& common) {
             const auto& availability = common.graphics_availability;
             if (availability.has_vulkan() &&
-                !availability.vulkan().physical_devices().empty() &&
-                (availability.vulkan().physical_devices(0).type() !=
-                 ::gfxstream::proto::VulkanPhysicalDevice::TYPE_DISCRETE_GPU)) {
-              return false;
+                !availability.vulkan().physical_devices().empty()) {
+              const auto type =
+                  availability.vulkan().physical_devices(0).type();
+              return type ==
+                         ::gfxstream::proto::VulkanPhysicalDevice::TYPE_DISCRETE_GPU ||
+                     type ==
+                         ::gfxstream::proto::VulkanPhysicalDevice::TYPE_INTEGRATED_GPU;
             }
             return true;
           },

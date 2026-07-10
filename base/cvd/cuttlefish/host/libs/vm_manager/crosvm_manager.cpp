@@ -220,7 +220,7 @@ Result<std::string> HostLavapipeIcdPathForArch() {
       break;
   }
   return CF_ERR("Unhandled host arch " << HostArchStr()
-                                       << " for finding SwiftShader ICD.");
+                                       << " for finding Lavapipe ICD.");
 }
 
 Result<void> MaybeConfigureVulkanIcd(const CuttlefishConfig& config,
