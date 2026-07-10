@@ -54,6 +54,7 @@ RUN apt-get update -y && \
       libclang-rt-19-dev \
       libdrm-dev \
       libepoxy-dev \
+      liblzma-dev \
       libwayland-dev \
       lld-19 \
       openjdk-21-jdk \
