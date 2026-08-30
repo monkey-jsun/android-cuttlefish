@@ -143,6 +143,9 @@ class DeviceControlApp {
   #deviceCount = 0;
   #micActive = false;
   #adbConnected = false;
+  // Physical keys the device has been told are down, so they can be released
+  // if this page stops receiving their keyup.
+  #heldKeys = new Set();
 
   #displaySpecPresets = {
     'display-spec-preset-phone': {
@@ -1153,6 +1156,18 @@ class DeviceControlApp {
   #startKeyboardCapture(elem) {
     elem.addEventListener('keydown', evt => this.#onKeyEvent(evt));
     elem.addEventListener('keyup', evt => this.#onKeyEvent(evt));
+    // A key pressed here can be released somewhere this page never sees it:
+    // alt-tabbing away sends the keydown to the device but delivers the keyup
+    // to the host's window manager. The device then holds that key forever,
+    // and a held modifier silently turns every later keystroke into a chord.
+    elem.addEventListener('blur', () => this.#releaseHeldKeys());
+    window.addEventListener('blur', () => this.#releaseHeldKeys());
+    window.addEventListener('pagehide', () => this.#releaseHeldKeys());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.#releaseHeldKeys();
+      }
+    });
   }
 
   #onKeyEvent(e) {
@@ -1161,7 +1176,23 @@ class DeviceControlApp {
       // focus, if the default behavior is not prevented.
       e.preventDefault();
     }
+    if (e.type == 'keydown') {
+      this.#heldKeys.add(e.code);
+    } else {
+      this.#heldKeys.delete(e.code);
+    }
     this.#deviceConnection.sendKeyEvent(e.code, e.type);
+  }
+
+  #releaseHeldKeys() {
+    // Clear first: sending can throw while the connection is going away, and
+    // the keys must not stay in the set if that happens.
+    const held = [...this.#heldKeys];
+    this.#heldKeys.clear();
+    for (const code of held) {
+      this.#deviceConnection.sendKeyEvent(code, 'keyup');
+    }
+    releaseLatchedModifiers();
   }
 
   #startWheelCapture(elm) {

@@ -29,8 +29,15 @@ function processButton(buttonName, keyCode, dc) {
   button.addEventListener('mouseup', onMouseUp);
 }
 
+// Modifiers latched down by the on-screen buttons. They stay down until
+// clicked again, so they have to be released along with the physical keys
+// whenever the page gives up the keyboard.
+const latchedModifiers = [];
+
 function processToggleButton(buttonName, keyCode, dc) {
   let toggle = false;
+  let button = document.getElementById(buttonName);
+
   function onMouseDown(evt) {
     const kPrimaryButton = 1;
     if ((evt.buttons & kPrimaryButton) == 0) {
@@ -42,14 +49,31 @@ function processToggleButton(buttonName, keyCode, dc) {
     } else {
       dc.sendKeyEvent(keyCode, "keyup");
     }
-    this.classList.toggle('active');
+    button.classList.toggle('active');
   }
 
-  let button = document.getElementById(buttonName);
   button.addEventListener('mousedown', onMouseDown);
+  latchedModifiers.push(() => {
+    if (!toggle) {
+      return;
+    }
+    toggle = false;
+    dc.sendKeyEvent(keyCode, "keyup");
+    button.classList.remove('active');
+  });
+}
+
+// Releases every modifier currently latched by an on-screen button. The latch
+// state lives only in this page, so without this a reload leaves the device
+// holding a modifier that no button can any longer release.
+function releaseLatchedModifiers() {
+  for (const release of latchedModifiers) {
+    release();
+  }
 }
 
 function enableKeyboardRewriteButton(dc) {
+  latchedModifiers.length = 0;
   processToggleButton("shift-button", "ShiftLeft", dc);
   processToggleButton("ctrl-button", "CtrlLeft", dc);
   processToggleButton("alt-button", "AltLeft", dc);
