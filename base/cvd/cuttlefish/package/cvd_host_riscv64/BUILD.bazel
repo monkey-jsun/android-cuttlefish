@@ -9,7 +9,9 @@
 #
 # The .deb file is NOT a bazel-tracked input -- it's produced by debuild
 # (not bazel) and lives outside the bazel workspace.  The genrule looks it
-# up in the source tree at action time and fails if absent.  Build order:
+# up in the source tree at action time and fails if absent.  Its content hash
+# reaches the action key via CF_DEB_SHA (set by cf-bazel-build.sh), so
+# rebuilding the deb re-runs this rule.  Build order:
 #
 #   tools/buildutils/build_package.sh base    # produces cuttlefish-base*.deb
 #   tools/buildutils/cf-bazel-build.sh \

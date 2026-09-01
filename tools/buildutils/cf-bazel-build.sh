@@ -51,6 +51,10 @@ ACTION_ENV=()
 DEB_PATH=$(ls "$REPO_ROOT"/cuttlefish-base_*_riscv64.deb 2>/dev/null | head -1)
 if [ -n "$DEB_PATH" ]; then
     ACTION_ENV+=(--action_env=CF_DEB_PATH="$(readlink -f "$DEB_PATH")")
+    # The deb is not a bazel input, so its path alone leaves the genrule's
+    # action key unchanged when the deb is rebuilt.  Feed the content hash in
+    # too, so a new deb re-runs the packaging step.
+    ACTION_ENV+=(--action_env=CF_DEB_SHA="$(sha256sum "$DEB_PATH" | cut -d' ' -f1)")
 fi
 
 cd "$REPO_ROOT/base/cvd"
