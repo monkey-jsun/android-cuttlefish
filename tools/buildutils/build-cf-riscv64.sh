@@ -10,6 +10,9 @@
 #   tools/buildutils/build-cf-riscv64.sh --shell     # interactive shell in
 #                                                    # the same container
 #                                                    # for ad-hoc dev work
+#   tools/buildutils/build-cf-riscv64.sh //a:target [//b:target ...]
+#                                                    # build just those bazel
+#                                                    # targets
 #
 # The image (android-cuttlefish-build:riscv64) is a riscv64 Debian trixie
 # environment -- runs natively on a riscv64 host and under qemu-user
@@ -45,9 +48,11 @@ DOCKERFILE="$REPO_ROOT/tools/buildutils/cw/Containerfile.riscv64"
 CACHE_DIR="$REPO_ROOT/.bazel-cache"
 
 SHELL_MODE=0
+TARGETS=()
 for arg in "$@"; do
     case "$arg" in
         --shell) SHELL_MODE=1 ;;
+        //*) TARGETS+=("$arg") ;;
         -h|--help)
             sed -n '/^# Usage:/,/^#$/p' "$0" | sed 's/^# \?//'
             exit 0
@@ -122,6 +127,21 @@ DOCKER_RUN_ARGS=(
 if [ "$SHELL_MODE" -eq 1 ]; then
     echo "[build-cf-riscv64] entering interactive shell in $IMAGE_NAME..."
     exec docker run -it "${DOCKER_RUN_ARGS[@]}" "$IMAGE_NAME" bash
+fi
+
+if [ "${#TARGETS[@]}" -gt 0 ]; then
+    echo "[build-cf-riscv64] building ${TARGETS[*]}..."
+    exec docker run -i "${DOCKER_RUN_ARGS[@]}" "$IMAGE_NAME" bash -c '
+        set -e
+        . /etc/cargo-bazel-env
+        # Bazel actions compile against system headers (libopus, libssl, ...)
+        # that the image does not carry, so install the build-deps first --
+        # the same step the deb build runs.
+        cd base
+        sudo mk-build-deps -i -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
+        cd ..
+        tools/buildutils/cf-bazel-build.sh "$@"
+    ' _ "${TARGETS[@]}"
 fi
 
 echo "[build-cf-riscv64] running cuttlefish-base deb + cvd_host_riscv64 tarball..."
