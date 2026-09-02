@@ -555,6 +555,10 @@ int CuttlefishMain() {
         custom_action.device_states);
   }
 
+  // Register() sends the device description, which lists the audio streams the
+  // client builds its <audio> elements from, so the stream has to exist first.
+  auto audio_handler = SetupAudio(instance, *streamer);
+
   std::shared_ptr<webrtc_streaming::OperatorObserver> operator_observer(
       new CfOperatorObserver());
   streamer->Register(operator_observer);
@@ -568,7 +572,6 @@ int CuttlefishMain() {
     VLOG(0) << "Webrtc control thread exiting.";
   });
 
-  auto audio_handler = SetupAudio(instance, *streamer);
   if (audio_handler) {
     audio_handler->Start();
   }
