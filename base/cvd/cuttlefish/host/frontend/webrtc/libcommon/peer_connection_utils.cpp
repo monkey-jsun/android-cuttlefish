@@ -24,7 +24,7 @@
 #include <api/video_codecs/builtin_video_encoder_factory.h>
 
 #include "cuttlefish/host/frontend/webrtc/libcommon/audio_device.h"
-#include "cuttlefish/host/frontend/webrtc/libcommon/vp8only_encoder_factory.h"
+#include "cuttlefish/host/frontend/webrtc/libcommon/single_codec_encoder_factory.h"
 
 namespace cuttlefish {
 namespace webrtc_streaming {
@@ -42,14 +42,15 @@ Result<rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>>
 CreatePeerConnectionFactory(
     rtc::Thread* network_thread, rtc::Thread* worker_thread,
     rtc::Thread* signal_thread,
-    rtc::scoped_refptr<webrtc::AudioDeviceModule> audio_device_module) {
+    rtc::scoped_refptr<webrtc::AudioDeviceModule> audio_device_module,
+    const std::string& sdp_video_codec) {
   auto peer_connection_factory = webrtc::CreatePeerConnectionFactory(
       network_thread, worker_thread, signal_thread, audio_device_module,
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
-      // Only VP8 is supported
-      std::make_unique<VP8OnlyEncoderFactory>(
-          webrtc::CreateBuiltinVideoEncoderFactory()),
+      // The device offers exactly one video codec; see --video_codec.
+      std::make_unique<SingleCodecEncoderFactory>(
+          webrtc::CreateBuiltinVideoEncoderFactory(), sdp_video_codec),
       webrtc::CreateBuiltinVideoDecoderFactory(), nullptr /* audio_mixer */,
       nullptr /* audio_processing */);
   CF_EXPECT(peer_connection_factory.get(),

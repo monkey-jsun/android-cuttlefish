@@ -84,7 +84,20 @@ DEFINE_string(group_id, "",
               "UNUSED - Kept to support webRTC and run_cvd with different "
               "versions during the migration");
 
+DEFINE_string(video_codec, "vp8",
+              "Video codec the device offers to clients: vp8 or h264");
+
 namespace cuttlefish {
+
+// gflag value to the name used in SDP.
+std::string SdpVideoCodec(const std::string& codec) {
+  if (codec == "vp8") {
+    return "VP8";
+  }
+  CHECK(codec == "h264")
+      << "Unknown --video_codec \"" << codec << "\", expected vp8 or h264";
+  return "H264";
+}
 
 using webrtc_streaming::RecordingManager;
 using webrtc_streaming::Streamer;
@@ -404,6 +417,7 @@ int CuttlefishMain() {
   streamer_config.control_env_proxy_server_path =
       instance.grpc_socket_path() + "/ControlEnvProxyServer.sock";
   streamer_config.operator_path = cvd_config->sig_server_address();
+  streamer_config.sdp_video_codec = SdpVideoCodec(FLAGS_video_codec);
   streamer_config.enable_mouse = instance.enable_mouse();
   streamer_config.enable_gamepad = instance.enable_gamepad();
 

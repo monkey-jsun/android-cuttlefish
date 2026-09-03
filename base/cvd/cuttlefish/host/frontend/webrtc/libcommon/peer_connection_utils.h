@@ -31,7 +31,8 @@ Result<rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>>
 CreatePeerConnectionFactory(
     rtc::Thread* network_thread, rtc::Thread* worker_thread,
     rtc::Thread* signal_thread,
-    rtc::scoped_refptr<webrtc::AudioDeviceModule> audio_device_module);
+    rtc::scoped_refptr<webrtc::AudioDeviceModule> audio_device_module,
+    const std::string& sdp_video_codec);
 
 // TODO(b/263528313): Use a packet socket factory instead of a port range.
 Result<rtc::scoped_refptr<webrtc::PeerConnectionInterface>>

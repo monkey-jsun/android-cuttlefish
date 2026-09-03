@@ -231,7 +231,8 @@ std::unique_ptr<Streamer> Streamer::Create(
 
   auto result = CreatePeerConnectionFactory(
       impl->network_thread_.get(), impl->worker_thread_.get(),
-      impl->signal_thread_.get(), impl->audio_device_module_->device_module());
+      impl->signal_thread_.get(), impl->audio_device_module_->device_module(),
+      cfg.sdp_video_codec);
 
   if (!result.ok()) {
     LOG(ERROR) << result.error();

@@ -54,6 +54,8 @@ struct StreamerConfig {
   int adb_port;
   // Path of ControlEnvProxyServer for serving Rest API in WebUI.
   std::string control_env_proxy_server_path;
+  // SDP name of the single video codec the device offers, e.g. "VP8".
+  std::string sdp_video_codec;
   // Whether mouse is enabled.
   bool enable_mouse;
   // Whether gamepad is enabled.

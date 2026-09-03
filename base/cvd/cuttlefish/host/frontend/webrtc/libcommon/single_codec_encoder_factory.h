@@ -16,15 +16,20 @@
 
 #pragma once
 
+#include <string>
+
 #include <api/video_codecs/video_encoder_factory.h>
 #include <api/video_codecs/video_encoder.h>
 
 namespace cuttlefish {
 namespace webrtc_streaming {
 
-class VP8OnlyEncoderFactory : public webrtc::VideoEncoderFactory {
+// Restricts an inner factory to a single SDP codec, so the device offers
+// exactly one video format.
+class SingleCodecEncoderFactory : public webrtc::VideoEncoderFactory {
  public:
-  VP8OnlyEncoderFactory(std::unique_ptr<webrtc::VideoEncoderFactory> inner);
+  SingleCodecEncoderFactory(std::unique_ptr<webrtc::VideoEncoderFactory> inner,
+                            std::string codec_name);
 
   std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
 
@@ -35,6 +40,7 @@ class VP8OnlyEncoderFactory : public webrtc::VideoEncoderFactory {
 
  private:
   std::unique_ptr<webrtc::VideoEncoderFactory> inner_;
+  std::string codec_name_;
 };
 
 }  // namespace webrtc_streaming

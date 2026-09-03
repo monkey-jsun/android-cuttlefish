@@ -14,35 +14,35 @@
  * limitations under the License.
  */
 
-#include "cuttlefish/host/frontend/webrtc/libcommon/vp8only_encoder_factory.h"
+#include "cuttlefish/host/frontend/webrtc/libcommon/single_codec_encoder_factory.h"
 
 #include <api/video_codecs/video_encoder.h>
 
 namespace cuttlefish {
 namespace webrtc_streaming {
-VP8OnlyEncoderFactory::VP8OnlyEncoderFactory(
-    std::unique_ptr<webrtc::VideoEncoderFactory> inner)
-    : inner_(std::move(inner)) {}
+SingleCodecEncoderFactory::SingleCodecEncoderFactory(
+    std::unique_ptr<webrtc::VideoEncoderFactory> inner, std::string codec_name)
+    : inner_(std::move(inner)), codec_name_(std::move(codec_name)) {}
 
-std::vector<webrtc::SdpVideoFormat> VP8OnlyEncoderFactory::GetSupportedFormats()
-    const {
+std::vector<webrtc::SdpVideoFormat>
+SingleCodecEncoderFactory::GetSupportedFormats() const {
   std::vector<webrtc::SdpVideoFormat> ret;
-  // Allow only VP8
   for (auto& format : inner_->GetSupportedFormats()) {
-    if (format.name == "VP8") {
+    if (format.name == codec_name_) {
       ret.push_back(format);
     }
   }
   return ret;
 }
 
-std::unique_ptr<webrtc::VideoEncoder> VP8OnlyEncoderFactory::CreateVideoEncoder(
+std::unique_ptr<webrtc::VideoEncoder>
+SingleCodecEncoderFactory::CreateVideoEncoder(
     const webrtc::SdpVideoFormat& format) {
   return inner_->CreateVideoEncoder(format);
 }
 
 std::unique_ptr<webrtc::VideoEncoderFactory::EncoderSelectorInterface>
-VP8OnlyEncoderFactory::GetEncoderSelector() const {
+SingleCodecEncoderFactory::GetEncoderSelector() const {
   return inner_->GetEncoderSelector();
 }
 
