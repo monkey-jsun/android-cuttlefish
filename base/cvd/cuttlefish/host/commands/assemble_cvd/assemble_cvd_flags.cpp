@@ -192,6 +192,9 @@ DEFINE_vec(udp_port_range, CF_DEFAULTS_UDP_PORT_RANGE,
               "The minimum and maximum UDP port numbers to allocate for ICE "
               "candidates as 'min:max'. To use any port just specify '0:0'");
 
+DEFINE_vec(video_codec, CF_DEFAULTS_VIDEO_CODEC,
+           "Video codec the device offers to webrtc clients: vp8 or h264");
+
 DEFINE_vec(
     webrtc_device_id, CF_DEFAULTS_WEBRTC_DEVICE_ID,
     "The for the device to register with the signaling server. Every "

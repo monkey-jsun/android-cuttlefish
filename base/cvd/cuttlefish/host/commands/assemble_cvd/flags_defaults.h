@@ -223,6 +223,7 @@
 // Streaming default parameters
 #define CF_DEFAULTS_START_WEBRTC false
 #define CF_DEFAULTS_WEBRTC_DEVICE_ID "cvd-{num}"
+#define CF_DEFAULTS_VIDEO_CODEC "vp8"
 #define CF_DEFAULTS_WEBRTC_ASSETS_DIR \
   cuttlefish::DefaultHostArtifactsPath("usr/share/webrtc/assets")
 #define CF_DEFAULTS_WEBRTC_SIG_SERVER_ADDR "/run/cuttlefish/operator"

@@ -324,6 +324,7 @@ class CuttlefishConfig {
     bool use_cvdalloc() const;
     int vsock_guest_cid() const;
     std::string vsock_guest_group() const;
+    std::string video_codec() const;
     std::string uuid() const;
     std::string instance_name() const;
     std::string environment_name() const;
@@ -638,6 +639,7 @@ class CuttlefishConfig {
     void set_use_cvdalloc(bool use_cvdalloc);
     void set_vsock_guest_cid(int vsock_guest_cid);
     void set_vsock_guest_group(const std::string& vsock_guest_group);
+    void set_video_codec(const std::string& video_codec);
     void set_uuid(const std::string& uuid);
     void set_environment_name(const std::string& env_name);
     // modem simulator related

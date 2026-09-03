@@ -137,6 +137,7 @@ class StreamerSockets : public virtual SetupFeature {
                      input_connections_provider_.RotaryDeviceConnection());
     cmd.AddParameter("-keyboard_fd=",
                      input_connections_provider_.KeyboardConnection());
+    cmd.AddParameter("--video_codec=", instance_.video_codec());
     cmd.AddParameter("-frame_server_fd=", frames_server_);
     if (instance_.enable_audio()) {
       cmd.AddParameter("--audio_server_fd=", audio_server_);

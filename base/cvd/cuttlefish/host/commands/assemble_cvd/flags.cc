@@ -506,6 +506,8 @@ Result<CuttlefishConfig> InitializeCuttlefishConfiguration(
       vsock_guest_cid));
   std::vector<std::string> vsock_guest_group_vec =
       CF_EXPECT(GET_FLAG_STR_VALUE(vsock_guest_group));
+  std::vector<std::string> video_codec_vec =
+      CF_EXPECT(GET_FLAG_STR_VALUE(video_codec));
   CpusFlag cpus_values = CF_EXPECT(CpusFlag::FromGlobalGflags());
   BlankDataImageMbFlag blank_data_image_mb_values =
       CF_EXPECT(BlankDataImageMbFlag::FromGlobalGflags(guest_configs));
@@ -907,6 +909,11 @@ Result<CuttlefishConfig> InitializeCuttlefishConfiguration(
 
     const auto vsock_guest_group = vsock_guest_group_vec[instance_index];
     instance.set_vsock_guest_group(vsock_guest_group);
+    const auto video_codec = video_codec_vec[instance_index];
+    CF_EXPECTF(video_codec == "vp8" || video_codec == "h264",
+               "Unknown --video_codec \"{}\", expected vp8 or h264",
+               video_codec);
+    instance.set_video_codec(video_codec);
 
     instance.set_session_id(iface_config.mobile_tap.session_id);
 

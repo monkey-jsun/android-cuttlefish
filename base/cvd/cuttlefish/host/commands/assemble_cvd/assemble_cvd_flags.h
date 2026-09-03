@@ -202,6 +202,8 @@ DECLARE_vec(enable_tap_devices);
 
 DECLARE_vec(vcpu_config_path);
 
+DECLARE_vec(video_codec);
+
 DECLARE_string(kvm_path);
 
 DECLARE_string(vhost_vsock_path);

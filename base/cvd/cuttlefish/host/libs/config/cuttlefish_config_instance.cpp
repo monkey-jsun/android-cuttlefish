@@ -1720,6 +1720,15 @@ void CuttlefishConfig::MutableInstanceSpecific::set_camera_server_port(
   (*Dictionary())[kCameraServerPort] = camera_server_port;
 }
 
+static constexpr char kVideoCodec[] = "video_codec";
+void CuttlefishConfig::MutableInstanceSpecific::set_video_codec(
+    const std::string& video_codec) {
+  (*Dictionary())[kVideoCodec] = video_codec;
+}
+std::string CuttlefishConfig::InstanceSpecific::video_codec() const {
+  return (*Dictionary())[kVideoCodec].asString();
+}
+
 static constexpr char kWebrtcDeviceId[] = "webrtc_device_id";
 void CuttlefishConfig::MutableInstanceSpecific::set_webrtc_device_id(
     const std::string& id) {
