@@ -10,7 +10,7 @@
 #   tools/buildutils/build-cf-riscv64.sh --shell     # interactive shell in
 #                                                    # the same container
 #                                                    # for ad-hoc dev work
-#   tools/buildutils/build-cf-riscv64.sh //a:target [//b:target ...]
+#   tools/buildutils/build-cf-riscv64.sh //a:target [@ext//b:target ...]
 #                                                    # build just those bazel
 #                                                    # targets
 #   tools/buildutils/build-cf-riscv64.sh --dev //a:target
@@ -66,7 +66,7 @@ for arg in "$@"; do
         --shell) SHELL_MODE=1 ;;
         --dev) DEV_MODE=1 ;;
         --dev-stop) DEV_STOP=1 ;;
-        //*) TARGETS+=("$arg") ;;
+        //*|@*) TARGETS+=("$arg") ;;
         -h|--help)
             sed -n '/^# Usage:/,/^#$/p' "$0" | sed 's/^# \?//'
             exit 0
