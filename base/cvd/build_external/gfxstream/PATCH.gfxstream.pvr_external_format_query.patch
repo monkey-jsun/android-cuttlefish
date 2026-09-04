@@ -1,0 +1,59 @@
+--- a/host/vulkan/vk_common_operations.cpp
++++ b/host/vulkan/vk_common_operations.cpp
+@@ -557,6 +557,56 @@
+ 
+     VkResult res = mGetImageFormatProperties2Func(physdev, &formatInfo2, &outProps2);
+ 
++    // Some drivers report VK_ERROR_FORMAT_NOT_SUPPORTED when
++    // VkPhysicalDeviceExternalImageFormatInfo is chained, for image parameters they can in
++    // fact create, bind exportable memory to, and export an fd for. Observed on PowerVR
++    // B-Series BXM-4-64 MC1 (driver 24.2@6603887): every VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT
++    // format in the combos list above is rejected by this query for both OPAQUE_FD and
++    // DMA_BUF, across all tilings and usages, while the full
++    // vkCreateImage -> vkAllocateMemory(VkExportMemoryAllocateInfo) -> vkBindImageMemory ->
++    // vkGetMemoryFdKHR sequence succeeds for the same parameters.
++    //
++    // Taking the query at its word costs the whole format. For R8G8B8A8_UNORM that is fatal:
++    // findRepresentativeColorBufferMemoryTypeIndexLocked() cannot build its probe ColorBuffer
++    // and initFeatures() aborts with "Failed to find memory type for ColorBuffers".
++    //
++    // So on that specific error, re-ask without the external chain and use that answer. The
++    // unchained query is the same one used when the instance lacks external-memory
++    // capabilities, and on the affected driver it answers correctly.
++    if (res == VK_ERROR_FORMAT_NOT_SUPPORTED && supportsExternalMemory()) {
++        VkImageFormatProperties fallbackImageFormatProps;
++        VkResult fallbackRes = vk->vkGetPhysicalDeviceImageFormatProperties(
++            physdev, info->format, info->type, info->tiling, info->usageFlags, info->createFlags,
++            &fallbackImageFormatProps);
++
++        if (fallbackRes == VK_SUCCESS) {
++            GFXSTREAM_WARNING(
++                "Driver rejected %s %s %s %s with an external handle type but accepts it "
++                "without one; treating as supported. External-memory capability for this "
++                "format is decided per-image at allocation time.",
++                string_VkFormat(info->format), string_VkImageType(info->type),
++                string_VkImageTiling(info->tiling),
++                string_VkImageUsageFlagBits((VkImageUsageFlagBits)info->usageFlags));
++
++            info->supported = true;
++
++            // Left false because the external query gave us no externalMemoryFeatures to
++            // derive them from. Neither field is consulted downstream -- allocation decides
++            // dedicated-ness from vkGetImageMemoryRequirements2 per image -- so this is a
++            // reporting gap, not a behaviour change.
++            info->supportsExternalMemory = false;
++            info->requiresDedicatedAllocation = false;
++
++            info->imageFormatProps2 = {
++                VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
++                0,
++                fallbackImageFormatProps,
++            };
++
++            return true;
++        }
++    }
++
+     if (res != VK_SUCCESS) {
+         if (res == VK_ERROR_FORMAT_NOT_SUPPORTED) {
+             GFXSTREAM_DEBUG("Not Supported: %s %s %s %s", string_VkFormat(info->format),

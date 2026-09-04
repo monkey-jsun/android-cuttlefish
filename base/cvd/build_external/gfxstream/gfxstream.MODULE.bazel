@@ -7,5 +7,9 @@ git_repository(
     patch_strip = 1,
     patches = [
         "@//build_external/gfxstream:PATCH.gfxstream.build_variables.patch",
+        # PowerVR reports FORMAT_NOT_SUPPORTED for images it can actually create
+        # and export; fall back to the unchained query.  Drop when b/400999642
+        # or an Imagination driver fix lands.
+        "@//build_external/gfxstream:PATCH.gfxstream.pvr_external_format_query.patch",
     ],
 )
