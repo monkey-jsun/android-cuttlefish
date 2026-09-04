@@ -13,6 +13,15 @@
 #   tools/buildutils/build-cf-riscv64.sh //a:target [//b:target ...]
 #                                                    # build just those bazel
 #                                                    # targets
+#   tools/buildutils/build-cf-riscv64.sh --dev //a:target
+#                                                    # same, but in a reusable
+#                                                    # container so bazel keeps
+#                                                    # its analysis cache warm
+#   tools/buildutils/build-cf-riscv64.sh --dev-stop  # discard that container
+#
+# --dev is for iteration only.  Release artifacts come from the no-argument
+# form, which always runs in a fresh --rm container so nothing accumulated
+# during development can leak into them.
 #
 # The image (android-cuttlefish-build:riscv64) is a riscv64 Debian trixie
 # environment -- runs natively on a riscv64 host and under qemu-user
@@ -48,10 +57,15 @@ DOCKERFILE="$REPO_ROOT/tools/buildutils/cw/Containerfile.riscv64"
 CACHE_DIR="$REPO_ROOT/.bazel-cache"
 
 SHELL_MODE=0
+DEV_MODE=0
+DEV_STOP=0
+DEV_CONTAINER=cf-build
 TARGETS=()
 for arg in "$@"; do
     case "$arg" in
         --shell) SHELL_MODE=1 ;;
+        --dev) DEV_MODE=1 ;;
+        --dev-stop) DEV_STOP=1 ;;
         //*) TARGETS+=("$arg") ;;
         -h|--help)
             sed -n '/^# Usage:/,/^#$/p' "$0" | sed 's/^# \?//'
@@ -123,6 +137,69 @@ DOCKER_RUN_ARGS=(
     -v "$CACHE_DIR:$HOME/.cache/bazel"
     -w "$REPO_ROOT"
 )
+
+if [ "$DEV_STOP" -eq 1 ]; then
+    if docker rm -f "$DEV_CONTAINER" >/dev/null 2>&1; then
+        echo "[build-cf-riscv64] removed $DEV_CONTAINER"
+    else
+        echo "[build-cf-riscv64] no $DEV_CONTAINER container"
+    fi
+    exit 0
+fi
+
+if [ "$DEV_MODE" -eq 1 ]; then
+    if [ "${#TARGETS[@]}" -eq 0 ]; then
+        echo "--dev builds specific targets; pass at least one //target." >&2
+        echo "Release artifacts come from the no-argument form." >&2
+        exit 1
+    fi
+
+    # Recreate the container whenever the image it was started from is no
+    # longer the current one, so a Containerfile change is never silently
+    # ignored.
+    want_image=$(docker image inspect --format '{{.Id}}' "$IMAGE_NAME")
+    have_image=$(docker inspect --format '{{.Image}}' "$DEV_CONTAINER" 2>/dev/null || true)
+    if [ "$want_image" != "$have_image" ]; then
+        if [ -n "$have_image" ]; then
+            echo "[build-cf-riscv64] image changed, recreating $DEV_CONTAINER..."
+        fi
+        docker rm -f "$DEV_CONTAINER" >/dev/null 2>&1 || true
+        # Same arguments as the ephemeral path, without --rm so the bazel
+        # server survives between builds.
+        DEV_RUN_ARGS=()
+        for a in "${DOCKER_RUN_ARGS[@]}"; do
+            [ "$a" = "--rm" ] || DEV_RUN_ARGS+=("$a")
+        done
+        docker run -d --name "$DEV_CONTAINER" "${DEV_RUN_ARGS[@]}" \
+            "$IMAGE_NAME" sleep infinity >/dev/null
+        # The entrypoint creates the user after the container is up, and under
+        # qemu that takes a moment.  Exec'ing before it lands gives
+        # "sudo: you do not exist in the passwd database".
+        for _ in $(seq 1 120); do
+            if docker exec "$DEV_CONTAINER" getent passwd "$(id -u)" \
+                >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+        echo "[build-cf-riscv64] started $DEV_CONTAINER"
+    fi
+
+    echo "[build-cf-riscv64] building ${TARGETS[*]} in $DEV_CONTAINER..."
+    exec docker exec -i -u "$(id -u):$(id -g)" -w "$REPO_ROOT" -e HOME="$HOME" \
+        "$DEV_CONTAINER" bash -c '
+        set -e
+        . /etc/cargo-bazel-env
+        # Build-deps persist with the container, so install them only once.
+        if [ ! -e "$HOME/.cf-build-deps-installed" ]; then
+            cd base
+            sudo mk-build-deps -i -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
+            cd ..
+            touch "$HOME/.cf-build-deps-installed"
+        fi
+        tools/buildutils/cf-bazel-build.sh "$@"
+    ' _ "${TARGETS[@]}"
+fi
 
 if [ "$SHELL_MODE" -eq 1 ]; then
     echo "[build-cf-riscv64] entering interactive shell in $IMAGE_NAME..."
