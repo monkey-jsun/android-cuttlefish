@@ -154,11 +154,14 @@ if [ "$DEV_MODE" -eq 1 ]; then
         exit 1
     fi
 
-    # Recreate the container whenever the image it was started from is no
-    # longer the current one, so a Containerfile change is never silently
-    # ignored.
-    want_image=$(docker image inspect --format '{{.Id}}' "$IMAGE_NAME")
-    have_image=$(docker inspect --format '{{.Image}}' "$DEV_CONTAINER" 2>/dev/null || true)
+    # Recreate the container whenever the image content it was started from
+    # has changed, so a Containerfile edit is never silently ignored.
+    # Compare layer digests rather than image IDs: buildkit stamps a fresh
+    # creation time on every build, so the ID differs even when every layer
+    # was a cache hit.
+    want_image=$(docker image inspect --format '{{.RootFS.Layers}}' "$IMAGE_NAME")
+    have_image=$(docker inspect --format '{{.Image}}' "$DEV_CONTAINER" 2>/dev/null \
+        | xargs -r docker image inspect --format '{{.RootFS.Layers}}' 2>/dev/null || true)
     if [ "$want_image" != "$have_image" ]; then
         if [ -n "$have_image" ]; then
             echo "[build-cf-riscv64] image changed, recreating $DEV_CONTAINER..."
