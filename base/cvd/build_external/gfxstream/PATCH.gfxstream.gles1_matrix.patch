@@ -1,0 +1,78 @@
+--- a/host/gl/glestranslator/gles_cm/gles_cm_context.cpp
++++ b/host/gl/glestranslator/gles_cm/gles_cm_context.cpp
+@@ -168,9 +168,9 @@
+         m_glesMajorVersion = maj;
+         m_glesMinorVersion = min;
+ 
+-        mProjMatrices.resize(1, glm::mat4());
+-        mModelviewMatrices.resize(1, glm::mat4());
+-        mTextureMatrices.resize(kMaxTextureUnits, { glm::mat4() });
++        mProjMatrices.resize(1, glm::mat4(1.0f));
++        mModelviewMatrices.resize(1, glm::mat4(1.0f));
++        mTextureMatrices.resize(kMaxTextureUnits, { glm::mat4(1.0f) });
+         mTexUnitEnvs.resize(kMaxTextureUnits, TexEnv());
+         mTexGens.resize(kMaxTextureUnits, TexEnv());
+ 
+@@ -793,6 +793,26 @@
+ 
+ bool GLEScmContext::glGetFloatv(GLenum pname, GLfloat *params)
+ {
++    // Fixed-function matrix queries. On a GLES / core-profile host the underlying driver has no
++    // GL_*_MATRIX state, so forwarding glGetFloatv there leaves |params| untouched (garbage). We
++    // emulate the fixed-function pipeline in CoreProfileEngine and hold the real matrices in our
++    // own stacks, so serve them from there. (Apps commonly read the modelview back with
++    // glGetFloatv(GL_MODELVIEW_MATRIX) and later glLoadMatrixf it; without this they load garbage.)
++    if (m_coreProfileEngine) {
++        glm::mat4 m;
++        bool isMatrix = true;
++        switch (pname) {
++        case GL_MODELVIEW_MATRIX:  m = getModelviewMatrix(); break;
++        case GL_PROJECTION_MATRIX: m = getProjMatrix();      break;
++        case GL_TEXTURE_MATRIX:    m = getTextureMatrix();   break;
++        default: isMatrix = false; break;
++        }
++        if (isMatrix) {
++            memcpy(params, glm::value_ptr(m), 16 * sizeof(GLfloat));
++            return true;
++        }
++    }
++
+     GLint iParam;
+ 
+     if(glGetIntegerv(pname, &iParam))
+@@ -942,7 +962,7 @@
+ }
+ 
+ void GLEScmContext::loadIdentity() {
+-    currMatrix() = glm::mat4();
++    currMatrix() = glm::mat4(1.0f);
+ 
+     if (m_coreProfileEngine) {
+         core().loadIdentity();
+@@ -1769,7 +1789,7 @@
+ }
+ 
+ void GLEScmContext::rotatef(float angle, float x, float y, float z) {
+-    glm::mat4 rot = glm::rotate(glm::mat4(), 3.14159265358979f / 180.0f * angle, glm::vec3(x, y, z));
++    glm::mat4 rot = glm::rotate(glm::mat4(1.0f), 3.14159265358979f / 180.0f * angle, glm::vec3(x, y, z));
+     currMatrix() *= rot;
+ 
+     if (m_coreProfileEngine) {
+@@ -1780,7 +1800,7 @@
+ }
+ 
+ void GLEScmContext::scalef(float x, float y, float z) {
+-    glm::mat4 scale = glm::scale(glm::mat4(), glm::vec3(x, y, z));
++    glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(x, y, z));
+     currMatrix() *= scale;
+ 
+     if (m_coreProfileEngine) {
+@@ -1791,7 +1811,7 @@
+ }
+ 
+ void GLEScmContext::translatef(float x, float y, float z) {
+-    glm::mat4 tr = glm::translate(glm::mat4(), glm::vec3(x, y, z));
++    glm::mat4 tr = glm::translate(glm::mat4(1.0f), glm::vec3(x, y, z));
+     currMatrix() *= tr;
+ 
+     if (m_coreProfileEngine) {

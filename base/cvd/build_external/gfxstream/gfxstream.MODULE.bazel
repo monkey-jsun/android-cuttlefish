@@ -11,5 +11,7 @@ git_repository(
         # and export; fall back to the unchained query.  Drop when b/400999642
         # or an Imagination driver fix lands.
         "@//build_external/gfxstream:PATCH.gfxstream.pvr_external_format_query.patch",
+        # Fix GLES1 fixed-function matrices on GLES/core hosts (PowerVR); see the patch.
+        "@//build_external/gfxstream:PATCH.gfxstream.gles1_matrix.patch",
     ],
 )
