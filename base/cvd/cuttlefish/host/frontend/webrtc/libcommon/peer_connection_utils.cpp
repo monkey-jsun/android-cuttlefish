@@ -24,6 +24,7 @@
 #include <api/video_codecs/builtin_video_encoder_factory.h>
 
 #include "cuttlefish/host/frontend/webrtc/libcommon/audio_device.h"
+#include "cuttlefish/host/frontend/webrtc/libcommon/hwenc_v4l2/v4l2_encoder_factory.h"
 #include "cuttlefish/host/frontend/webrtc/libcommon/single_codec_encoder_factory.h"
 
 namespace cuttlefish {
@@ -48,9 +49,13 @@ CreatePeerConnectionFactory(
       network_thread, worker_thread, signal_thread, audio_device_module,
       webrtc::CreateBuiltinAudioEncoderFactory(),
       webrtc::CreateBuiltinAudioDecoderFactory(),
-      // The device offers exactly one video codec; see --video_codec.
+      // The device offers exactly one video codec (see --video_codec). H.264
+      // is routed to the host's V4L2 hardware encoder when one is present,
+      // otherwise everything falls back to the builtin software encoders.
       std::make_unique<SingleCodecEncoderFactory>(
-          webrtc::CreateBuiltinVideoEncoderFactory(), sdp_video_codec),
+          std::make_unique<HardwareVideoEncoderFactory>(
+              webrtc::CreateBuiltinVideoEncoderFactory()),
+          sdp_video_codec),
       webrtc::CreateBuiltinVideoDecoderFactory(), nullptr /* audio_mixer */,
       nullptr /* audio_processing */);
   CF_EXPECT(peer_connection_factory.get(),

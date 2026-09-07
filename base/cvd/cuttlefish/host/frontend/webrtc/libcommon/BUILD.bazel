@@ -44,6 +44,7 @@ cf_cc_library(
     hdrs = ["peer_connection_utils.h"],
     deps = [
         "//cuttlefish/host/frontend/webrtc/libcommon:audio_device",
+        "//cuttlefish/host/frontend/webrtc/libcommon:hwenc_v4l2",
         "//cuttlefish/host/frontend/webrtc/libcommon:single_codec_encoder_factory",
         "//cuttlefish/result",
         "@libwebrtc",
@@ -80,5 +81,27 @@ cf_cc_library(
     hdrs = ["single_codec_encoder_factory.h"],
     deps = [
         "@libwebrtc",
+    ],
+)
+
+cf_cc_library(
+    name = "hwenc_v4l2",
+    srcs = [
+        "hwenc_v4l2/v4l2_buffers.cpp",
+        "hwenc_v4l2/v4l2_encoder_factory.cpp",
+        "hwenc_v4l2/v4l2_h264_encode_converter.cpp",
+        "hwenc_v4l2/v4l2_h264_encoder.cpp",
+        "hwenc_v4l2/v4l2_runner.cpp",
+    ],
+    hdrs = [
+        "hwenc_v4l2/v4l2_buffers.h",
+        "hwenc_v4l2/v4l2_encoder_factory.h",
+        "hwenc_v4l2/v4l2_h264_encode_converter.h",
+        "hwenc_v4l2/v4l2_h264_encoder.h",
+        "hwenc_v4l2/v4l2_runner.h",
+    ],
+    deps = [
+        "@libwebrtc",
+        "@libyuv",
     ],
 )

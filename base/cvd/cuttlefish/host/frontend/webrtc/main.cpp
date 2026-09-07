@@ -32,6 +32,7 @@
 #include "cuttlefish/host/frontend/webrtc/connection_observer.h"
 #include "cuttlefish/host/frontend/webrtc/display_handler.h"
 #include "cuttlefish/host/frontend/webrtc/kernel_log_events_handler.h"
+#include "cuttlefish/host/frontend/webrtc/libcommon/hwenc_v4l2/v4l2_encoder_factory.h"
 #include "cuttlefish/host/frontend/webrtc/libdevice/camera_controller.h"
 #include "cuttlefish/host/frontend/webrtc/libdevice/lights_observer.h"
 #include "cuttlefish/host/frontend/webrtc/libdevice/local_recorder.h"
@@ -84,18 +85,28 @@ DEFINE_string(group_id, "",
               "UNUSED - Kept to support webRTC and run_cvd with different "
               "versions during the migration");
 
-DEFINE_string(video_codec, "vp8",
-              "Video codec the device offers to clients: vp8 or h264");
+DEFINE_string(video_codec, "auto",
+              "Video codec the device offers to clients: auto, vp8 or h264. "
+              "auto offers h264 when a host V4L2 hardware encoder is present "
+              "(hardware-accelerated), otherwise vp8 (software libvpx).");
 
 namespace cuttlefish {
 
 // gflag value to the name used in SDP.
 std::string SdpVideoCodec(const std::string& codec) {
+  if (codec == "auto") {
+    // Prefer hardware H.264 when the host exposes a V4L2 m2m encoder; fall
+    // back to software VP8 otherwise.
+    bool hw_h264 = !webrtc_streaming::FindV4L2H264EncoderDevice().empty();
+    LOG(INFO) << "--video_codec=auto selected " << (hw_h264 ? "h264" : "vp8");
+    return hw_h264 ? "H264" : "VP8";
+  }
   if (codec == "vp8") {
     return "VP8";
   }
   CHECK(codec == "h264")
-      << "Unknown --video_codec \"" << codec << "\", expected vp8 or h264";
+      << "Unknown --video_codec \"" << codec
+      << "\", expected auto, vp8 or h264";
   return "H264";
 }
 
