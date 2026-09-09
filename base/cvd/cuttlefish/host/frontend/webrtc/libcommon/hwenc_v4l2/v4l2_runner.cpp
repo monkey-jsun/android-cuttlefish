@@ -90,7 +90,10 @@ void V4L2Runner::PollProcess() {
     RTC_LOG(LS_VERBOSE) << "[POLL][" << name_ << "] Start poll";
     pollfd p = {fd_, POLLIN | POLLPRI, 0};
     int ret = poll(&p, 1, 500);
-    if (abort_poll_ && output_buffers_available_.size() == (size_t)src_count_) {
+    // Exit as soon as teardown is requested. The destructor's STREAMOFF
+    // reclaims any buffers still in flight, so there's no need to wait for
+    // them here -- and waiting would hang shutdown when frames have stopped.
+    if (abort_poll_) {
       break;
     }
     if (ret == -1) {
@@ -124,12 +127,12 @@ void V4L2Runner::PollProcess() {
       v4l2_buf.m.planes = planes;
       RTC_LOG(LS_VERBOSE) << "[POLL][" << name_ << "] DQBUF output";
       int ret = ioctl(fd_, VIDIOC_DQBUF, &v4l2_buf);
-      if (ret != 0) {
+      if (ret == 0) {
+        output_buffers_available_.push(v4l2_buf.index);
+      } else if (errno != EAGAIN) {
         RTC_LOG(LS_ERROR) << "[POLL][" << name_
                           << "] Failed to dequeue output buffer: error="
                           << strerror(errno);
-      } else {
-        output_buffers_available_.push(v4l2_buf.index);
       }
 
       v4l2_buf = {};
@@ -141,9 +144,11 @@ void V4L2Runner::PollProcess() {
       RTC_LOG(LS_VERBOSE) << "[POLL][" << name_ << "] DQBUF capture";
       ret = ioctl(fd_, VIDIOC_DQBUF, &v4l2_buf);
       if (ret != 0) {
-        RTC_LOG(LS_ERROR) << "[POLL][" << name_
-                          << "] Failed to dequeue capture buffer: error="
-                          << strerror(errno);
+        if (errno != EAGAIN) {
+          RTC_LOG(LS_ERROR) << "[POLL][" << name_
+                            << "] Failed to dequeue capture buffer: error="
+                            << strerror(errno);
+        }
       } else {
         if (abort_poll_) {
           break;

@@ -98,7 +98,11 @@ int V4L2H264EncodeConverter::Init(std::string device,
                                   int src_width,
                                   int src_height,
                                   int src_stride) {
-  fd_ = open(device.c_str(), O_RDWR, 0);
+  // Non-blocking so the poll thread's VIDIOC_DQBUF returns EAGAIN instead of
+  // blocking when a queue has nothing ready; a blocking dequeue would hang the
+  // poll thread at teardown (no more frames arrive), deadlocking the join in
+  // the destructor before it can close the device.
+  fd_ = open(device.c_str(), O_RDWR | O_NONBLOCK, 0);
   if (fd_ < 0) {
     RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to open v4l2 encoder "
                       << device;
