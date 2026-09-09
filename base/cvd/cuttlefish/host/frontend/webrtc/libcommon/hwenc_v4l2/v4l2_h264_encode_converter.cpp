@@ -107,39 +107,51 @@ int V4L2H264EncodeConverter::Init(std::string device,
 
   v4l2_control ctrl = {};
   ctrl.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
-  // Constrained-baseline to match the SDP profile-level-id (42e01f) we
-  // advertise, which every WebRTC browser accepts.
-  ctrl.value = V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE;
+  // Baseline, decodable under the advertised 42e01f profile-level-id.
+  ctrl.value = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
   if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
     RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to set profile";
     return WEBRTC_VIDEO_CODEC_ERROR;
   }
 
   ctrl.id = V4L2_CID_MPEG_VIDEO_H264_LEVEL;
-  ctrl.value = V4L2_MPEG_VIDEO_H264_LEVEL_4_2;
+  // 3.1 matches the advertised profile-level-id and fits 720x1280.
+  ctrl.value = V4L2_MPEG_VIDEO_H264_LEVEL_3_1;
   if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
     RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to set level";
     return WEBRTC_VIDEO_CODEC_ERROR;
   }
 
+  // Optional tuning controls, non-fatal when unsupported: keyframes are
+  // requested on demand over RTCP rather than a fixed intra period, and when
+  // the encoder won't inline SPS/PPS the caller prepends them in software.
   ctrl.id = V4L2_CID_MPEG_VIDEO_H264_I_PERIOD;
   ctrl.value = 500;
   if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
-    RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to set intra period";
-    return WEBRTC_VIDEO_CODEC_ERROR;
+    RTC_LOG(LS_WARNING) << __FUNCTION__ << "  intra period not supported";
   }
 
   ctrl.id = V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER;
   ctrl.value = 1;
   if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
-    RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to enable inline header";
-    return WEBRTC_VIDEO_CODEC_ERROR;
+    RTC_LOG(LS_WARNING) << __FUNCTION__ << "  inline headers not supported";
   }
 
+  // Encoder input: planar YUV 4:2:0 in three separate planes (YUV420M).
   v4l2_format src_fmt = {};
-  V4L2Helper::InitFormat(V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, src_width,
-                         src_height, V4L2_PIX_FMT_YUV420, src_stride, 0,
-                         &src_fmt);
+  src_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+  src_fmt.fmt.pix_mp.width = src_width;
+  src_fmt.fmt.pix_mp.height = src_height;
+  src_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_YUV420M;
+  src_fmt.fmt.pix_mp.field = V4L2_FIELD_ANY;
+  src_fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_DEFAULT;
+  src_fmt.fmt.pix_mp.num_planes = 3;
+  src_fmt.fmt.pix_mp.plane_fmt[0].bytesperline = src_width;
+  src_fmt.fmt.pix_mp.plane_fmt[0].sizeimage = src_width * src_height;
+  src_fmt.fmt.pix_mp.plane_fmt[1].bytesperline = src_width / 2;
+  src_fmt.fmt.pix_mp.plane_fmt[1].sizeimage = (src_width / 2) * (src_height / 2);
+  src_fmt.fmt.pix_mp.plane_fmt[2].bytesperline = src_width / 2;
+  src_fmt.fmt.pix_mp.plane_fmt[2].sizeimage = (src_width / 2) * (src_height / 2);
   if (ioctl(fd_, VIDIOC_S_FMT, &src_fmt) < 0) {
     RTC_LOG(LS_ERROR) << "Failed to set output format";
     return WEBRTC_VIDEO_CODEC_ERROR;
@@ -147,8 +159,7 @@ int V4L2H264EncodeConverter::Init(std::string device,
   RTC_LOG(LS_INFO) << __FUNCTION__ << "  Output buffer format"
                    << "  width:" << src_fmt.fmt.pix_mp.width
                    << "  height:" << src_fmt.fmt.pix_mp.height
-                   << "  bytesperline:"
-                   << src_fmt.fmt.pix_mp.plane_fmt[0].bytesperline;
+                   << "  planes:" << (int)src_fmt.fmt.pix_mp.num_planes;
 
   v4l2_format dst_fmt = {};
   V4L2Helper::InitFormat(V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, src_width,
@@ -222,43 +233,41 @@ int V4L2H264EncodeConverter::Encode(
     return WEBRTC_VIDEO_CODEC_ERROR;
   }
 
-  rtc::scoped_refptr<webrtc::VideoFrameBuffer> bind_buffer;
   v4l2_buffer v4l2_buf = {};
   v4l2_buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+  v4l2_buf.memory = V4L2_MEMORY_MMAP;
   v4l2_buf.index = *index;
   v4l2_buf.field = V4L2_FIELD_NONE;
-  v4l2_buf.length = 1;
+  v4l2_buf.length = 3;
   v4l2_plane planes[VIDEO_MAX_PLANES] = {};
   v4l2_buf.m.planes = planes;
   v4l2_buf.flags |= V4L2_BUF_FLAG_TIMESTAMP_COPY;
   v4l2_buf.timestamp.tv_sec = timestamp_us / rtc::kNumMicrosecsPerSec;
   v4l2_buf.timestamp.tv_usec = timestamp_us % rtc::kNumMicrosecsPerSec;
 
-  // Cuttlefish feeds CPU-side I420 frames; copy them into the MMAP output
-  // buffer. (The DMABUF/native zero-copy path from momo is not used here.)
-  v4l2_buf.memory = V4L2_MEMORY_MMAP;
-
+  // Cuttlefish feeds CPU-side I420 frames; copy each plane into the MMAP
+  // output buffer's matching YUV420M plane.
   auto& src_buffer = src_buffers_.at(v4l2_buf.index);
-
   rtc::scoped_refptr<webrtc::I420BufferInterface> i420_buffer =
       frame_buffer->ToI420();
   int width = i420_buffer->width();
   int height = i420_buffer->height();
-  int dst_stride = src_buffer.planes[0].bytesperline;
-  int dst_chroma_stride = (dst_stride + 1) / 2;
-  int dst_chroma_height = (height + 1) / 2;
-  uint8_t* dst_y = (uint8_t*)src_buffer.planes[0].start;
-  uint8_t* dst_u = dst_y + dst_stride * height;
-  uint8_t* dst_v = dst_u + dst_chroma_stride * dst_chroma_height;
   libyuv::I420Copy(i420_buffer->DataY(), i420_buffer->StrideY(),
                    i420_buffer->DataU(), i420_buffer->StrideU(),
-                   i420_buffer->DataV(), i420_buffer->StrideV(), dst_y,
-                   dst_stride, dst_u, dst_chroma_stride, dst_v,
-                   dst_chroma_stride, width, height);
-  bind_buffer = i420_buffer;
+                   i420_buffer->DataV(), i420_buffer->StrideV(),
+                   (uint8_t*)src_buffer.planes[0].start,
+                   src_buffer.planes[0].bytesperline,
+                   (uint8_t*)src_buffer.planes[1].start,
+                   src_buffer.planes[1].bytesperline,
+                   (uint8_t*)src_buffer.planes[2].start,
+                   src_buffer.planes[2].bytesperline, width, height);
+  for (int j = 0; j < 3; j++) {
+    planes[j].bytesused = src_buffer.planes[j].sizeimage;
+    planes[j].length = src_buffer.planes[j].length;
+  }
 
   runner_->Enqueue(
-      &v4l2_buf, [this, bind_buffer, on_complete](
+      &v4l2_buf, [this, on_complete](
                      v4l2_buffer* v4l2_buf, std::function<void()> on_next) {
         int64_t timestamp_us =
             v4l2_buf->timestamp.tv_sec * rtc::kNumMicrosecsPerSec +

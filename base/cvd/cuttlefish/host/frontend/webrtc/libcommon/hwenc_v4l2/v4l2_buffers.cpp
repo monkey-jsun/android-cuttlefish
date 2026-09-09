@@ -59,7 +59,9 @@ int V4L2Buffers::Allocate(int fd,
       v4l2_buf.type = type;
       v4l2_buf.memory = V4L2_MEMORY_MMAP;
       v4l2_buf.index = i;
-      v4l2_buf.length = 1;
+      // Provide room for every plane; the driver sets length to the actual
+      // plane count (1 for coded H.264, 3 for planar YUV420M input).
+      v4l2_buf.length = VIDEO_MAX_PLANES;
       v4l2_buf.m.planes = planes;
       if (ioctl(fd, VIDIOC_QUERYBUF, &v4l2_buf) < 0) {
         RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to query buffer"

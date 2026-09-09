@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -55,8 +56,16 @@ class V4L2H264Encoder : public webrtc::VideoEncoder {
   int32_t Configure(int32_t width, int32_t height);
   void SetBitrateBps(uint32_t bitrate_bps);
   void SetFramerateFps(double framerate_fps);
+  // Called for each buffer the hardware emits. Some encoders deliver the
+  // SPS/PPS as a separate buffer sharing the keyframe's timestamp; this caches
+  // such header-only buffers and prepends them to the keyframe, and matches
+  // each coded buffer back to its source frame by timestamp.
+  void OnEncodedBuffer(unsigned char* buffer,
+                       size_t size,
+                       int64_t timestamp_us,
+                       bool is_key_frame);
   int32_t SendFrame(const webrtc::VideoFrame& frame,
-                    unsigned char* buffer,
+                    const unsigned char* buffer,
                     size_t size,
                     int64_t timestamp_us,
                     bool is_key_frame);
@@ -79,6 +88,14 @@ class V4L2H264Encoder : public webrtc::VideoEncoder {
   webrtc::H264BitstreamParser h264_bitstream_parser_;
 
   webrtc::EncodedImage encoded_image_;
+
+  // Guards frames_ and header_, written on the encode thread and read on the
+  // runner's poll thread.
+  std::mutex frames_mutex_;
+  // Source frames awaiting their coded buffer, keyed by timestamp_us.
+  std::map<int64_t, webrtc::VideoFrame> frames_;
+  // Most recent SPS/PPS header bytes, prepended to the next keyframe.
+  std::string header_;
 };
 
 }  // namespace webrtc_streaming

@@ -20,6 +20,11 @@
 
 #include "cuttlefish/host/frontend/webrtc/libcommon/hwenc_v4l2/v4l2_h264_encoder.h"
 
+#include <cstdint>
+#include <iterator>
+#include <optional>
+#include <string>
+
 // Linux
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
@@ -38,6 +43,26 @@ namespace {
 
 const int kLowH264QpThreshold = 34;
 const int kHighH264QpThreshold = 40;
+
+// True if the Annex-B bitstream contains a VCL NAL (coded slice, types 1-5),
+// i.e. actual picture data rather than SPS/PPS/SEI headers alone.
+bool ContainsVclNal(const uint8_t* p, size_t n) {
+  for (size_t i = 0; i + 4 < n; i++) {
+    bool sc3 = p[i] == 0 && p[i + 1] == 0 && p[i + 2] == 1;
+    bool sc4 = p[i] == 0 && p[i + 1] == 0 && p[i + 2] == 0 && p[i + 3] == 1;
+    if (!sc3 && !sc4) {
+      continue;
+    }
+    size_t h = sc3 ? i + 3 : i + 4;
+    if (h < n) {
+      int type = p[h] & 0x1f;
+      if (type >= 1 && type <= 5) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 }  // namespace
 
@@ -92,6 +117,9 @@ int32_t V4L2H264Encoder::Configure(int32_t width, int32_t height) {
 
 int32_t V4L2H264Encoder::Release() {
   h264_encoder_.reset();
+  std::lock_guard<std::mutex> lock(frames_mutex_);
+  frames_.clear();
+  header_.clear();
   return WEBRTC_VIDEO_CODEC_OK;
 }
 
@@ -206,18 +234,57 @@ int32_t V4L2H264Encoder::Encode(
   SetBitrateBps(bitrate_adjuster_.GetAdjustedBitrateBps());
   SetFramerateFps(target_framerate_fps_);
 
+  // Coded buffers are matched back to their source frame by timestamp (the
+  // hardware may emit an extra header buffer), so keep the frame until then.
+  {
+    std::lock_guard<std::mutex> lock(frames_mutex_);
+    frames_.insert_or_assign(input_frame.timestamp_us(), input_frame);
+  }
   h264_encoder_->Encode(
       frame_buffer, input_frame.timestamp_us(), force_key_frame,
-      [this, input_frame](uint8_t* buffer, int size, int64_t timestamp_us,
-                          bool is_key_frame) {
-        SendFrame(input_frame, buffer, size, timestamp_us, is_key_frame);
+      [this](uint8_t* buffer, int size, int64_t timestamp_us,
+             bool is_key_frame) {
+        OnEncodedBuffer(buffer, size, timestamp_us, is_key_frame);
       });
 
   return WEBRTC_VIDEO_CODEC_OK;
 }
 
+void V4L2H264Encoder::OnEncodedBuffer(unsigned char* buffer,
+                                      size_t size,
+                                      int64_t timestamp_us,
+                                      bool is_key_frame) {
+  std::optional<webrtc::VideoFrame> frame;
+  // For a keyframe, prepend the cached SPS/PPS so it is self-contained for
+  // clients that join mid-stream.
+  std::string payload;
+  {
+    std::lock_guard<std::mutex> lock(frames_mutex_);
+    // A buffer with no coded slice is a standalone SPS/PPS header; cache it and
+    // wait for the frame that carries the same timestamp.
+    if (!ContainsVclNal(buffer, size)) {
+      header_.assign(reinterpret_cast<char*>(buffer), size);
+      return;
+    }
+    auto it = frames_.find(timestamp_us);
+    if (it == frames_.end()) {
+      RTC_LOG(LS_WARNING) << __FUNCTION__ << "  no source frame for timestamp "
+                          << timestamp_us;
+      return;
+    }
+    frame = it->second;
+    frames_.erase(frames_.begin(), std::next(it));
+    if (is_key_frame && !header_.empty()) {
+      payload = header_;
+    }
+  }
+  payload.append(reinterpret_cast<char*>(buffer), size);
+  SendFrame(*frame, reinterpret_cast<const unsigned char*>(payload.data()),
+            payload.size(), timestamp_us, is_key_frame);
+}
+
 int32_t V4L2H264Encoder::SendFrame(const webrtc::VideoFrame& frame,
-                                   unsigned char* buffer,
+                                   const unsigned char* buffer,
                                    size_t size,
                                    int64_t timestamp_us,
                                    bool is_key_frame) {

@@ -119,7 +119,7 @@ void V4L2Runner::PollProcess() {
       v4l2_buffer v4l2_buf = {};
       v4l2_buf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
       v4l2_buf.memory = src_memory_;
-      v4l2_buf.length = 1;
+      v4l2_buf.length = VIDEO_MAX_PLANES;
       v4l2_plane planes[VIDEO_MAX_PLANES] = {};
       v4l2_buf.m.planes = planes;
       RTC_LOG(LS_VERBOSE) << "[POLL][" << name_ << "] DQBUF output";
@@ -136,7 +136,7 @@ void V4L2Runner::PollProcess() {
       memset(planes, 0, sizeof(planes));
       v4l2_buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
       v4l2_buf.memory = V4L2_MEMORY_MMAP;
-      v4l2_buf.length = 1;
+      v4l2_buf.length = VIDEO_MAX_PLANES;
       v4l2_buf.m.planes = planes;
       RTC_LOG(LS_VERBOSE) << "[POLL][" << name_ << "] DQBUF capture";
       ret = ioctl(fd_, VIDIOC_DQBUF, &v4l2_buf);
@@ -156,6 +156,7 @@ void V4L2Runner::PollProcess() {
           (*on_complete)(&v4l2_buf, [fd = fd_, v4l2_buf]() mutable {
             v4l2_plane planes[VIDEO_MAX_PLANES] = {};
             v4l2_buf.m.planes = planes;
+            v4l2_buf.length = 1;  // coded capture buffer is single-plane
             if (ioctl(fd, VIDIOC_QBUF, &v4l2_buf) < 0) {
               RTC_LOG(LS_ERROR) << "Failed to enqueue capture buffer: error="
                                 << strerror(errno);
