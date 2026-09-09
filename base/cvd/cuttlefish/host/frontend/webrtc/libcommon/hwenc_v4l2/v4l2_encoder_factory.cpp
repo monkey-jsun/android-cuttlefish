@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -93,9 +94,25 @@ HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
 
 std::vector<webrtc::SdpVideoFormat>
 HardwareVideoEncoderFactory::GetSupportedFormats() const {
-  // Advertise exactly what the inner (builtin) factory supports; the hardware
-  // encoder produces standard H.264, so no format changes are needed.
-  return inner_->GetSupportedFormats();
+  auto formats = inner_->GetSupportedFormats();
+  if (!h264_device_.empty()) {
+    // The builtin software factory usually has no H.264 encoder, so it never
+    // advertises H.264 -- which leaves the offer with an empty video codec set
+    // when H.264 is selected. Advertise it ourselves since the V4L2 hardware
+    // encoder provides it. Constrained-baseline (matching what the encoder is
+    // configured to produce), both packetization modes, which browsers accept.
+    for (const char* packetization_mode : {"1", "0"}) {
+      webrtc::SdpVideoFormat h264(
+          kH264CodecName,
+          {{"level-asymmetry-allowed", "1"},
+           {"packetization-mode", packetization_mode},
+           {"profile-level-id", "42e01f"}});
+      if (std::find(formats.begin(), formats.end(), h264) == formats.end()) {
+        formats.push_back(h264);
+      }
+    }
+  }
+  return formats;
 }
 
 std::unique_ptr<webrtc::VideoEncoder>

@@ -107,7 +107,9 @@ int V4L2H264EncodeConverter::Init(std::string device,
 
   v4l2_control ctrl = {};
   ctrl.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
-  ctrl.value = V4L2_MPEG_VIDEO_H264_PROFILE_HIGH;
+  // Constrained-baseline to match the SDP profile-level-id (42e01f) we
+  // advertise, which every WebRTC browser accepts.
+  ctrl.value = V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE;
   if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
     RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to set profile";
     return WEBRTC_VIDEO_CODEC_ERROR;

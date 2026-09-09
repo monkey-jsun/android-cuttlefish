@@ -21,6 +21,9 @@
 #include <netdb.h>
 #include <openssl/rand.h>
 
+#include <api/rtp_transceiver_direction.h>
+#include <api/rtp_transceiver_interface.h>
+
 #include "absl/log/log.h"
 
 #include "cuttlefish/host/libs/config/cuttlefish_config.h"
@@ -107,14 +110,38 @@ ClientHandler::AddTrackToConnection(
   return err_or_sender.MoveValue();
 }
 
+// The display is sent device->browser only. Adding it as a default (sendrecv)
+// transceiver makes the offer's video m-section bidirectional, which requires a
+// codec usable in both directions; H.264 has no decoder here, so it gets dropped
+// and the m-section ends up with no primary video codec, aborting negotiation.
+// A send-only transceiver offers send-capable codecs (incl. H.264).
+static rtc::scoped_refptr<webrtc::RtpSenderInterface> AddSendOnlyVideoTrack(
+    const rtc::scoped_refptr<webrtc::PeerConnectionInterface> &peer_connection,
+    const rtc::scoped_refptr<webrtc::VideoTrackInterface> &track,
+    const std::string &label) {
+  if (!peer_connection) {
+    return nullptr;
+  }
+  webrtc::RtpTransceiverInit init;
+  init.direction = webrtc::RtpTransceiverDirection::kSendOnly;
+  init.stream_ids = {label};
+  auto transceiver_or = peer_connection->AddTransceiver(track, init);
+  if (!transceiver_or.ok()) {
+    LOG(ERROR) << "Failed to add send-only display transceiver: "
+               << transceiver_or.error().message();
+    return nullptr;
+  }
+  return transceiver_or.value()->sender();
+}
+
 bool ClientHandler::AddDisplay(
     rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track,
     const std::string &label) {
   auto [it, inserted] = displays_.emplace(label, DisplayTrackAndSender{
                                                      .track = video_track,
                                                  });
-  auto sender =
-      AddTrackToConnection(video_track, controller_.peer_connection(), label);
+  auto sender = AddSendOnlyVideoTrack(controller_.peer_connection(), video_track,
+                                      label);
   if (sender) {
     DisplayTrackAndSender &info = it->second;
     info.sender = sender;
@@ -177,7 +204,7 @@ ClientHandler::Build(
   // created
   for (auto &[label, info] : displays_) {
     info.sender =
-        CF_EXPECT(AddTrackToConnection(info.track, peer_connection, label).get());
+        CF_EXPECT(AddSendOnlyVideoTrack(peer_connection, info.track, label).get());
   }
   // Add the audio tracks to the peer connection
   for (auto &[audio_track, label] : audio_streams_) {
