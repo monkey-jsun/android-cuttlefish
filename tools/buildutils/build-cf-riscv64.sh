@@ -107,16 +107,27 @@ EOF
     fi
 fi
 
-echo "[build-cf-riscv64] building/refreshing image $IMAGE_NAME..."
-# --platform=linux/riscv64 forces docker to pull the riscv64 manifest
-# regardless of host arch.  On x86_64 hosts this is necessary (without
-# it, docker looks for an amd64 manifest in riscv64/debian and errors).
-# On riscv64 hosts it's a no-op (already native).
-docker build \
-    --platform=linux/riscv64 \
-    -f "$DOCKERFILE" \
-    -t "$IMAGE_NAME" \
-    "$(dirname "$DOCKERFILE")"
+# Build/refresh the image.  Kept in a function so --dev can skip it when it
+# reuses the dev container: buildkit stamps a fresh image ID on every build
+# even for a full cache hit, which orphans the ID the container was created
+# from -- calling this on every run would force a needless recreate.
+build_image() {
+    echo "[build-cf-riscv64] building/refreshing image $IMAGE_NAME..."
+    # --platform=linux/riscv64 forces the riscv64 manifest regardless of host
+    # arch (needed on x86_64 hosts; a no-op on native riscv64).
+    docker build \
+        --platform=linux/riscv64 \
+        -f "$DOCKERFILE" \
+        -t "$IMAGE_NAME" \
+        "$(dirname "$DOCKERFILE")"
+}
+
+# A content hash of the image's build context, used by --dev to tell whether
+# the container it cached is still built from the current definition.
+context_hash() {
+    find "$(dirname "$DOCKERFILE")" -type f | LC_ALL=C sort \
+        | xargs sha256sum | sha256sum | cut -d' ' -f1
+}
 
 mkdir -p "$CACHE_DIR"
 
@@ -154,26 +165,30 @@ if [ "$DEV_MODE" -eq 1 ]; then
         exit 1
     fi
 
-    # Recreate the container whenever the image content it was started from
-    # has changed, so a Containerfile edit is never silently ignored.
-    # Compare layer digests rather than image IDs: buildkit stamps a fresh
-    # creation time on every build, so the ID differs even when every layer
-    # was a cache hit.
-    want_image=$(docker image inspect --format '{{.RootFS.Layers}}' "$IMAGE_NAME")
-    have_image=$(docker inspect --format '{{.Image}}' "$DEV_CONTAINER" 2>/dev/null \
-        | xargs -r docker image inspect --format '{{.RootFS.Layers}}' 2>/dev/null || true)
-    if [ "$want_image" != "$have_image" ]; then
-        if [ -n "$have_image" ]; then
-            echo "[build-cf-riscv64] image changed, recreating $DEV_CONTAINER..."
-        fi
+    # Reuse the dev container unless the image definition changed or the
+    # container is gone/stopped.  Decide from a hash of the build context
+    # (recorded as a label when the container was created), NOT the image ID:
+    # a `docker build` re-stamps a fresh image ID even on a full cache hit, so
+    # comparing IDs/layers would orphan the container's source ID and recreate
+    # every run.  Building only when recreating also keeps the ID stable.
+    want_hash=$(context_hash)
+    have_hash=$(docker inspect \
+        --format '{{index .Config.Labels "cf-build-src-hash"}}' \
+        "$DEV_CONTAINER" 2>/dev/null || true)
+    running=$(docker inspect --format '{{.State.Running}}' "$DEV_CONTAINER" \
+        2>/dev/null || true)
+    if [ "$running" != "true" ] || [ "$want_hash" != "$have_hash" ]; then
+        build_image
         docker rm -f "$DEV_CONTAINER" >/dev/null 2>&1 || true
         # Same arguments as the ephemeral path, without --rm so the bazel
-        # server survives between builds.
+        # server survives between builds.  The label records the context hash
+        # this container was built from, for the reuse check above.
         DEV_RUN_ARGS=()
         for a in "${DOCKER_RUN_ARGS[@]}"; do
             [ "$a" = "--rm" ] || DEV_RUN_ARGS+=("$a")
         done
-        docker run -d --name "$DEV_CONTAINER" "${DEV_RUN_ARGS[@]}" \
+        docker run -d --name "$DEV_CONTAINER" \
+            --label "cf-build-src-hash=$want_hash" "${DEV_RUN_ARGS[@]}" \
             "$IMAGE_NAME" sleep infinity >/dev/null
         # The entrypoint creates the user after the container is up, and under
         # qemu that takes a moment.  Exec'ing before it lands gives
@@ -186,6 +201,8 @@ if [ "$DEV_MODE" -eq 1 ]; then
             sleep 1
         done
         echo "[build-cf-riscv64] started $DEV_CONTAINER"
+    else
+        echo "[build-cf-riscv64] reusing $DEV_CONTAINER"
     fi
 
     echo "[build-cf-riscv64] building ${TARGETS[*]} in $DEV_CONTAINER..."
@@ -205,11 +222,13 @@ if [ "$DEV_MODE" -eq 1 ]; then
 fi
 
 if [ "$SHELL_MODE" -eq 1 ]; then
+    build_image
     echo "[build-cf-riscv64] entering interactive shell in $IMAGE_NAME..."
     exec docker run -it "${DOCKER_RUN_ARGS[@]}" "$IMAGE_NAME" bash
 fi
 
 if [ "${#TARGETS[@]}" -gt 0 ]; then
+    build_image
     echo "[build-cf-riscv64] building ${TARGETS[*]}..."
     exec docker run -i "${DOCKER_RUN_ARGS[@]}" "$IMAGE_NAME" bash -c '
         set -e
@@ -224,6 +243,7 @@ if [ "${#TARGETS[@]}" -gt 0 ]; then
     ' _ "${TARGETS[@]}"
 fi
 
+build_image
 echo "[build-cf-riscv64] running cuttlefish-base deb + cvd_host_riscv64 tarball..."
 exec docker run -i "${DOCKER_RUN_ARGS[@]}" "$IMAGE_NAME" bash -c '
     set -e
