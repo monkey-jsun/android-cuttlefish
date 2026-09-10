@@ -910,8 +910,9 @@ Result<CuttlefishConfig> InitializeCuttlefishConfiguration(
     const auto vsock_guest_group = vsock_guest_group_vec[instance_index];
     instance.set_vsock_guest_group(vsock_guest_group);
     const auto video_codec = video_codec_vec[instance_index];
-    CF_EXPECTF(video_codec == "vp8" || video_codec == "h264",
-               "Unknown --video_codec \"{}\", expected vp8 or h264",
+    CF_EXPECTF(video_codec == "auto" || video_codec == "vp8" ||
+                   video_codec == "h264",
+               "Unknown --video_codec \"{}\", expected auto, vp8 or h264",
                video_codec);
     instance.set_video_codec(video_codec);
 

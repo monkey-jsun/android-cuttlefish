@@ -193,7 +193,9 @@ DEFINE_vec(udp_port_range, CF_DEFAULTS_UDP_PORT_RANGE,
               "candidates as 'min:max'. To use any port just specify '0:0'");
 
 DEFINE_vec(video_codec, CF_DEFAULTS_VIDEO_CODEC,
-           "Video codec the device offers to webrtc clients: vp8 or h264");
+           "Video codec the device offers to webrtc clients: auto, vp8 or "
+           "h264. auto offers h264 when the host has a hardware H.264 encoder, "
+           "otherwise vp8.");
 
 DEFINE_vec(
     webrtc_device_id, CF_DEFAULTS_WEBRTC_DEVICE_ID,
