@@ -108,6 +108,77 @@ bool CaptureSupportsH264(int fd) {
   return false;
 }
 
+// Confirm the device can actually be *configured* for encode, not merely that
+// it enumerates H.264: set the profile and formats the encoder will use and
+// reserve buffers on both queues. A device that advertises H.264 but rejects
+// this setup (a non-conforming encoder) fails here, so `auto` falls back to VP8
+// rather than negotiating H.264 and then black-screening.
+bool VerifyEncoderUsable(int fd, int profile, uint32_t input_format) {
+  v4l2_control ctrl = {};
+  ctrl.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
+  ctrl.value = profile;
+  if (ioctl(fd, VIDIOC_S_CTRL, &ctrl) < 0) {
+    return false;
+  }
+
+  const int w = 640, h = 480;
+  const int y = w * h, c = (w / 2) * (h / 2);
+  v4l2_format ofmt = {};
+  ofmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+  ofmt.fmt.pix_mp.width = w;
+  ofmt.fmt.pix_mp.height = h;
+  ofmt.fmt.pix_mp.pixelformat = input_format;
+  ofmt.fmt.pix_mp.field = V4L2_FIELD_ANY;
+  ofmt.fmt.pix_mp.plane_fmt[0].bytesperline = w;
+  if (input_format == V4L2_PIX_FMT_YUV420M) {
+    ofmt.fmt.pix_mp.num_planes = 3;
+    ofmt.fmt.pix_mp.plane_fmt[0].sizeimage = y;
+    ofmt.fmt.pix_mp.plane_fmt[1].bytesperline = w / 2;
+    ofmt.fmt.pix_mp.plane_fmt[1].sizeimage = c;
+    ofmt.fmt.pix_mp.plane_fmt[2].bytesperline = w / 2;
+    ofmt.fmt.pix_mp.plane_fmt[2].sizeimage = c;
+  } else if (input_format == V4L2_PIX_FMT_NV12M) {
+    ofmt.fmt.pix_mp.num_planes = 2;
+    ofmt.fmt.pix_mp.plane_fmt[0].sizeimage = y;
+    ofmt.fmt.pix_mp.plane_fmt[1].bytesperline = w;
+    ofmt.fmt.pix_mp.plane_fmt[1].sizeimage = 2 * c;
+  } else {
+    ofmt.fmt.pix_mp.num_planes = 1;
+    ofmt.fmt.pix_mp.plane_fmt[0].sizeimage = y + 2 * c;
+  }
+  if (ioctl(fd, VIDIOC_S_FMT, &ofmt) < 0) {
+    return false;
+  }
+
+  v4l2_format cfmt = {};
+  cfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+  cfmt.fmt.pix_mp.width = w;
+  cfmt.fmt.pix_mp.height = h;
+  cfmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_H264;
+  cfmt.fmt.pix_mp.field = V4L2_FIELD_ANY;
+  cfmt.fmt.pix_mp.num_planes = 1;
+  cfmt.fmt.pix_mp.plane_fmt[0].sizeimage = 256 << 10;
+  if (ioctl(fd, VIDIOC_S_FMT, &cfmt) < 0) {
+    return false;
+  }
+
+  // Reserve then immediately release a buffer on each queue.
+  const int types[] = {V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
+                       V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE};
+  for (int type : types) {
+    v4l2_requestbuffers rb = {};
+    rb.count = 1;
+    rb.type = type;
+    rb.memory = V4L2_MEMORY_MMAP;
+    if (ioctl(fd, VIDIOC_REQBUFS, &rb) < 0) {
+      return false;
+    }
+    rb.count = 0;
+    ioctl(fd, VIDIOC_REQBUFS, &rb);  // free
+  }
+  return true;
+}
+
 }  // namespace
 
 std::string FindV4L2H264EncoderDevice() {
@@ -130,9 +201,22 @@ std::string FindV4L2H264EncoderDevice() {
         is_h264_m2m = true;
       }
     }
+    // Accept the device only if it also accepts the encode configuration, so a
+    // present-but-non-conforming encoder doesn't get H.264 offered to it.
+    bool usable = false;
+    if (is_h264_m2m) {
+      webrtc::H264Profile sdp_profile;
+      int profile = ProbeBestH264Profile(fd, &sdp_profile);
+      uint32_t input_format = ProbeBestInputFormat(fd);
+      usable = VerifyEncoderUsable(fd, profile, input_format);
+      if (!usable) {
+        RTC_LOG(LS_INFO) << path << " advertises H.264 but rejected the encode "
+                            "setup; skipping";
+      }
+    }
     close(fd);
 
-    if (is_h264_m2m) {
+    if (usable) {
       RTC_LOG(LS_INFO) << "Found V4L2 H264 hardware encoder: " << path;
       return std::string(path);
     }
