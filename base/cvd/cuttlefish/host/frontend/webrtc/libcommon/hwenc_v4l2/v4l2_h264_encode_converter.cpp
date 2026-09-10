@@ -38,6 +38,20 @@
 // libyuv (exposed by the @libyuv external as a top-level header)
 #include "libyuv.h"
 
+namespace {
+// Number of V4L2 planes for an encoder input pixel format.
+int InputNumPlanes(uint32_t fourcc) {
+  switch (fourcc) {
+    case V4L2_PIX_FMT_YUV420M:
+      return 3;  // Y, U, V in separate planes
+    case V4L2_PIX_FMT_NV12M:
+      return 2;  // Y plane, interleaved UV plane
+    default:
+      return 1;  // NV12 / YUV420: one contiguous plane
+  }
+}
+}  // namespace
+
 // V4L2Helper
 
 void V4L2Helper::InitFormat(int type,
@@ -82,13 +96,14 @@ int V4L2Helper::QueueBuffers(int fd, const V4L2Buffers& buffers) {
 std::shared_ptr<V4L2H264EncodeConverter> V4L2H264EncodeConverter::Create(
     std::string device,
     int h264_profile,
+    uint32_t input_format,
     int src_memory,
     int src_width,
     int src_height,
     int src_stride) {
   auto p = std::make_shared<V4L2H264EncodeConverter>();
-  if (p->Init(device, h264_profile, src_memory, src_width, src_height,
-              src_stride) != WEBRTC_VIDEO_CODEC_OK) {
+  if (p->Init(device, h264_profile, input_format, src_memory, src_width,
+              src_height, src_stride) != WEBRTC_VIDEO_CODEC_OK) {
     return nullptr;
   }
   return p;
@@ -96,10 +111,12 @@ std::shared_ptr<V4L2H264EncodeConverter> V4L2H264EncodeConverter::Create(
 
 int V4L2H264EncodeConverter::Init(std::string device,
                                   int h264_profile,
+                                  uint32_t input_format,
                                   int src_memory,
                                   int src_width,
                                   int src_height,
                                   int src_stride) {
+  input_format_ = input_format;
   // Non-blocking so the poll thread's VIDIOC_DQBUF returns EAGAIN instead of
   // blocking when a queue has nothing ready; a blocking dequeue would hang the
   // poll thread at teardown (no more frames arrive), deadlocking the join in
@@ -143,21 +160,31 @@ int V4L2H264EncodeConverter::Init(std::string device,
     RTC_LOG(LS_WARNING) << __FUNCTION__ << "  inline headers not supported";
   }
 
-  // Encoder input: planar YUV 4:2:0 in three separate planes (YUV420M).
+  // Encoder input: the planar/semi-planar YUV 4:2:0 format the device accepts.
+  const int y_size = src_width * src_height;
+  const int c_size = (src_width / 2) * (src_height / 2);
   v4l2_format src_fmt = {};
   src_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
   src_fmt.fmt.pix_mp.width = src_width;
   src_fmt.fmt.pix_mp.height = src_height;
-  src_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_YUV420M;
+  src_fmt.fmt.pix_mp.pixelformat = input_format_;
   src_fmt.fmt.pix_mp.field = V4L2_FIELD_ANY;
   src_fmt.fmt.pix_mp.colorspace = V4L2_COLORSPACE_DEFAULT;
-  src_fmt.fmt.pix_mp.num_planes = 3;
+  src_fmt.fmt.pix_mp.num_planes = InputNumPlanes(input_format_);
   src_fmt.fmt.pix_mp.plane_fmt[0].bytesperline = src_width;
-  src_fmt.fmt.pix_mp.plane_fmt[0].sizeimage = src_width * src_height;
-  src_fmt.fmt.pix_mp.plane_fmt[1].bytesperline = src_width / 2;
-  src_fmt.fmt.pix_mp.plane_fmt[1].sizeimage = (src_width / 2) * (src_height / 2);
-  src_fmt.fmt.pix_mp.plane_fmt[2].bytesperline = src_width / 2;
-  src_fmt.fmt.pix_mp.plane_fmt[2].sizeimage = (src_width / 2) * (src_height / 2);
+  if (input_format_ == V4L2_PIX_FMT_YUV420M) {
+    src_fmt.fmt.pix_mp.plane_fmt[0].sizeimage = y_size;
+    src_fmt.fmt.pix_mp.plane_fmt[1].bytesperline = src_width / 2;
+    src_fmt.fmt.pix_mp.plane_fmt[1].sizeimage = c_size;
+    src_fmt.fmt.pix_mp.plane_fmt[2].bytesperline = src_width / 2;
+    src_fmt.fmt.pix_mp.plane_fmt[2].sizeimage = c_size;
+  } else if (input_format_ == V4L2_PIX_FMT_NV12M) {
+    src_fmt.fmt.pix_mp.plane_fmt[0].sizeimage = y_size;
+    src_fmt.fmt.pix_mp.plane_fmt[1].bytesperline = src_width;
+    src_fmt.fmt.pix_mp.plane_fmt[1].sizeimage = 2 * c_size;  // interleaved UV
+  } else {  // NV12 or YUV420: a single contiguous plane
+    src_fmt.fmt.pix_mp.plane_fmt[0].sizeimage = y_size + 2 * c_size;
+  }
   if (ioctl(fd_, VIDIOC_S_FMT, &src_fmt) < 0) {
     RTC_LOG(LS_ERROR) << "Failed to set output format";
     return WEBRTC_VIDEO_CODEC_ERROR;
@@ -244,30 +271,53 @@ int V4L2H264EncodeConverter::Encode(
   v4l2_buf.memory = V4L2_MEMORY_MMAP;
   v4l2_buf.index = *index;
   v4l2_buf.field = V4L2_FIELD_NONE;
-  v4l2_buf.length = 3;
+  v4l2_buf.length = InputNumPlanes(input_format_);
   v4l2_plane planes[VIDEO_MAX_PLANES] = {};
   v4l2_buf.m.planes = planes;
   v4l2_buf.flags |= V4L2_BUF_FLAG_TIMESTAMP_COPY;
   v4l2_buf.timestamp.tv_sec = timestamp_us / rtc::kNumMicrosecsPerSec;
   v4l2_buf.timestamp.tv_usec = timestamp_us % rtc::kNumMicrosecsPerSec;
 
-  // Cuttlefish feeds CPU-side I420 frames; copy each plane into the MMAP
-  // output buffer's matching YUV420M plane.
+  // Cuttlefish feeds CPU-side I420 frames; convert them into the MMAP output
+  // buffer laid out in the encoder's input pixel format.
   auto& src_buffer = src_buffers_.at(v4l2_buf.index);
   rtc::scoped_refptr<webrtc::I420BufferInterface> i420_buffer =
       frame_buffer->ToI420();
   int width = i420_buffer->width();
   int height = i420_buffer->height();
-  libyuv::I420Copy(i420_buffer->DataY(), i420_buffer->StrideY(),
-                   i420_buffer->DataU(), i420_buffer->StrideU(),
-                   i420_buffer->DataV(), i420_buffer->StrideV(),
-                   (uint8_t*)src_buffer.planes[0].start,
-                   src_buffer.planes[0].bytesperline,
-                   (uint8_t*)src_buffer.planes[1].start,
-                   src_buffer.planes[1].bytesperline,
-                   (uint8_t*)src_buffer.planes[2].start,
-                   src_buffer.planes[2].bytesperline, width, height);
-  for (int j = 0; j < 3; j++) {
+  uint8_t* dst = (uint8_t*)src_buffer.planes[0].start;
+  int y_stride = src_buffer.planes[0].bytesperline;
+  if (input_format_ == V4L2_PIX_FMT_YUV420M) {
+    libyuv::I420Copy(i420_buffer->DataY(), i420_buffer->StrideY(),
+                     i420_buffer->DataU(), i420_buffer->StrideU(),
+                     i420_buffer->DataV(), i420_buffer->StrideV(), dst, y_stride,
+                     (uint8_t*)src_buffer.planes[1].start,
+                     src_buffer.planes[1].bytesperline,
+                     (uint8_t*)src_buffer.planes[2].start,
+                     src_buffer.planes[2].bytesperline, width, height);
+  } else if (input_format_ == V4L2_PIX_FMT_NV12M) {
+    libyuv::I420ToNV12(i420_buffer->DataY(), i420_buffer->StrideY(),
+                       i420_buffer->DataU(), i420_buffer->StrideU(),
+                       i420_buffer->DataV(), i420_buffer->StrideV(), dst,
+                       y_stride, (uint8_t*)src_buffer.planes[1].start,
+                       src_buffer.planes[1].bytesperline, width, height);
+  } else if (input_format_ == V4L2_PIX_FMT_NV12) {
+    // Single plane: Y followed by interleaved UV.
+    libyuv::I420ToNV12(i420_buffer->DataY(), i420_buffer->StrideY(),
+                       i420_buffer->DataU(), i420_buffer->StrideU(),
+                       i420_buffer->DataV(), i420_buffer->StrideV(), dst,
+                       y_stride, dst + y_stride * height, y_stride, width,
+                       height);
+  } else {  // V4L2_PIX_FMT_YUV420: single plane, Y then U then V.
+    int c_stride = y_stride / 2;
+    uint8_t* u = dst + y_stride * height;
+    uint8_t* v = u + c_stride * (height / 2);
+    libyuv::I420Copy(i420_buffer->DataY(), i420_buffer->StrideY(),
+                     i420_buffer->DataU(), i420_buffer->StrideU(),
+                     i420_buffer->DataV(), i420_buffer->StrideV(), dst, y_stride,
+                     u, c_stride, v, c_stride, width, height);
+  }
+  for (int j = 0; j < InputNumPlanes(input_format_); j++) {
     planes[j].bytesused = src_buffer.planes[j].sizeimage;
     planes[j].length = src_buffer.planes[j].length;
   }

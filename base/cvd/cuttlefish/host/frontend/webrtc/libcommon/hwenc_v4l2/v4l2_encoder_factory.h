@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -52,6 +53,7 @@ class HardwareVideoEncoderFactory : public webrtc::VideoEncoderFactory {
   std::unique_ptr<webrtc::VideoEncoderFactory> inner_;
   std::string h264_device_;  // empty when no hardware H.264 encoder is present
   int h264_profile_;  // V4L2_MPEG_VIDEO_H264_PROFILE_* the device was probed for
+  uint32_t h264_input_format_;  // V4L2_PIX_FMT_* the input queue accepts
   std::string h264_profile_level_id_;  // SDP profile-level-id advertised for it
 };
 

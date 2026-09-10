@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <mutex>
 #include <string>
@@ -38,9 +39,10 @@ namespace webrtc_streaming {
 // A webrtc::VideoEncoder that encodes H.264 on a V4L2 m2m hardware encoder.
 class V4L2H264Encoder : public webrtc::VideoEncoder {
  public:
-  // |h264_profile| is the V4L2_MPEG_VIDEO_H264_PROFILE_* value to encode with,
-  // chosen by the factory from what the device supports.
-  V4L2H264Encoder(std::string device, int h264_profile);
+  // |h264_profile| is the V4L2_MPEG_VIDEO_H264_PROFILE_* value to encode with
+  // and |input_format| the V4L2_PIX_FMT_* the input queue accepts, both chosen
+  // by the factory from what the device supports.
+  V4L2H264Encoder(std::string device, int h264_profile, uint32_t input_format);
   ~V4L2H264Encoder() override;
 
   int32_t InitEncode(const webrtc::VideoCodec* codec_settings,
@@ -75,6 +77,7 @@ class V4L2H264Encoder : public webrtc::VideoEncoder {
  private:
   std::string device_;
   int h264_profile_;
+  uint32_t input_format_;
   std::shared_ptr<V4L2H264EncodeConverter> h264_encoder_;
 
   int32_t configured_width_;

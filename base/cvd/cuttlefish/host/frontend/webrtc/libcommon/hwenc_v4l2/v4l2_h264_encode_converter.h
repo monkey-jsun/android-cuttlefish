@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -53,8 +54,10 @@ class V4L2H264EncodeConverter {
 
   // |device| is the V4L2 m2m encoder node, e.g. "/dev/video11".
   // |h264_profile| is the V4L2_MPEG_VIDEO_H264_PROFILE_* value to configure.
+  // |input_format| is the V4L2_PIX_FMT_* the device accepts on its input queue.
   static std::shared_ptr<V4L2H264EncodeConverter> Create(std::string device,
                                                          int h264_profile,
+                                                         uint32_t input_format,
                                                          int src_memory,
                                                          int src_width,
                                                          int src_height,
@@ -66,6 +69,7 @@ class V4L2H264EncodeConverter {
 
   int Init(std::string device,
            int h264_profile,
+           uint32_t input_format,
            int src_memory,
            int src_width,
            int src_height,
@@ -83,6 +87,7 @@ class V4L2H264EncodeConverter {
 
  private:
   int fd_ = 0;
+  uint32_t input_format_ = 0;  // V4L2_PIX_FMT_* fed to the encoder input queue
 
   V4L2Buffers src_buffers_;
   V4L2Buffers dst_buffers_;

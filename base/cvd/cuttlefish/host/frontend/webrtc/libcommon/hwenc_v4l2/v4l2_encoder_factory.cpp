@@ -71,6 +71,27 @@ int ProbeBestH264Profile(int fd, webrtc::H264Profile* sdp_profile) {
   return V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
 }
 
+// Pick the encoder input pixel format, preferring CPU-friendly planar /
+// semi-planar 4:2:0 layouts the device enumerates on its input (OUTPUT) queue.
+uint32_t ProbeBestInputFormat(int fd) {
+  const uint32_t prefs[] = {V4L2_PIX_FMT_YUV420M, V4L2_PIX_FMT_NV12M,
+                            V4L2_PIX_FMT_NV12, V4L2_PIX_FMT_YUV420};
+  for (uint32_t want : prefs) {
+    for (int i = 0;; i++) {
+      v4l2_fmtdesc desc = {};
+      desc.index = i;
+      desc.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+      if (ioctl(fd, VIDIOC_ENUM_FMT, &desc) < 0) {
+        break;  // no more formats
+      }
+      if (desc.pixelformat == want) {
+        return want;
+      }
+    }
+  }
+  return V4L2_PIX_FMT_YUV420M;  // safe default for a 4:2:0 m2m encoder
+}
+
 // True if |fd|'s CAPTURE (coded) side can produce H.264, i.e. it is an encoder.
 bool CaptureSupportsH264(int fd) {
   for (int i = 0;; i++) {
@@ -125,6 +146,7 @@ HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
     : inner_(std::move(inner)),
       h264_device_(FindV4L2H264EncoderDevice()),
       h264_profile_(V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE),
+      h264_input_format_(V4L2_PIX_FMT_YUV420M),
       h264_profile_level_id_("42e01f") {
   if (h264_device_.empty()) {
     return;
@@ -135,6 +157,7 @@ HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
   }
   webrtc::H264Profile sdp_profile;
   h264_profile_ = ProbeBestH264Profile(fd, &sdp_profile);
+  h264_input_format_ = ProbeBestInputFormat(fd);
   close(fd);
   // Advertise a level (3.1) covering cuttlefish's default display; the encoder
   // is configured to the same level.
@@ -143,8 +166,12 @@ HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
   if (plid) {
     h264_profile_level_id_ = *plid;
   }
-  RTC_LOG(LS_INFO) << "V4L2 H264 encoder profile: v4l2=" << h264_profile_
-                   << " profile-level-id=" << h264_profile_level_id_;
+  char fourcc[5] = {static_cast<char>(h264_input_format_ & 0xff),
+                    static_cast<char>((h264_input_format_ >> 8) & 0xff),
+                    static_cast<char>((h264_input_format_ >> 16) & 0xff),
+                    static_cast<char>((h264_input_format_ >> 24) & 0xff), 0};
+  RTC_LOG(LS_INFO) << "V4L2 H264 encoder: profile-level-id="
+                   << h264_profile_level_id_ << " input=" << fourcc;
 }
 
 std::vector<webrtc::SdpVideoFormat>
@@ -175,7 +202,8 @@ HardwareVideoEncoderFactory::CreateVideoEncoder(
     const webrtc::SdpVideoFormat& format) {
   if (!h264_device_.empty() && format.name == kH264CodecName) {
     RTC_LOG(LS_INFO) << "Using V4L2 hardware H264 encoder on " << h264_device_;
-    return std::make_unique<V4L2H264Encoder>(h264_device_, h264_profile_);
+    return std::make_unique<V4L2H264Encoder>(h264_device_, h264_profile_,
+                                             h264_input_format_);
   }
   return inner_->CreateVideoEncoder(format);
 }
