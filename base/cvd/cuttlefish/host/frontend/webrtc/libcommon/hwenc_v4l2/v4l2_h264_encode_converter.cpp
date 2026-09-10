@@ -81,19 +81,21 @@ int V4L2Helper::QueueBuffers(int fd, const V4L2Buffers& buffers) {
 // V4L2H264EncodeConverter
 std::shared_ptr<V4L2H264EncodeConverter> V4L2H264EncodeConverter::Create(
     std::string device,
+    int h264_profile,
     int src_memory,
     int src_width,
     int src_height,
     int src_stride) {
   auto p = std::make_shared<V4L2H264EncodeConverter>();
-  if (p->Init(device, src_memory, src_width, src_height, src_stride) !=
-      WEBRTC_VIDEO_CODEC_OK) {
+  if (p->Init(device, h264_profile, src_memory, src_width, src_height,
+              src_stride) != WEBRTC_VIDEO_CODEC_OK) {
     return nullptr;
   }
   return p;
 }
 
 int V4L2H264EncodeConverter::Init(std::string device,
+                                  int h264_profile,
                                   int src_memory,
                                   int src_width,
                                   int src_height,
@@ -111,8 +113,8 @@ int V4L2H264EncodeConverter::Init(std::string device,
 
   v4l2_control ctrl = {};
   ctrl.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
-  // Baseline, decodable under the advertised 42e01f profile-level-id.
-  ctrl.value = V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
+  // The factory probed this profile from the device's supported set.
+  ctrl.value = h264_profile;
   if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
     RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to set profile";
     return WEBRTC_VIDEO_CODEC_ERROR;

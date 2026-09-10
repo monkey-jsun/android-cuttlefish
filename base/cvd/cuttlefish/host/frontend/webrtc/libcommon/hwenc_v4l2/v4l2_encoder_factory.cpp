@@ -28,6 +28,7 @@
 #include <sys/ioctl.h>
 
 // WebRTC
+#include <api/video_codecs/h264_profile_level_id.h>
 #include <rtc_base/logging.h>
 
 #include "cuttlefish/host/frontend/webrtc/libcommon/hwenc_v4l2/v4l2_h264_encoder.h"
@@ -38,6 +39,37 @@ namespace webrtc_streaming {
 namespace {
 
 constexpr char kH264CodecName[] = "H264";
+
+// Pick the H.264 profile to encode with, preferring the most broadly
+// decodable one the device offers. Returns the V4L2 profile value and, via
+// |sdp_profile|, the profile to advertise in SDP (a hardware Baseline stream
+// is constrained-baseline compatible, so it is advertised as such).
+int ProbeBestH264Profile(int fd, webrtc::H264Profile* sdp_profile) {
+  struct Pref {
+    int v4l2;
+    webrtc::H264Profile sdp;
+  };
+  const Pref prefs[] = {
+      {V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE,
+       webrtc::H264Profile::kProfileConstrainedBaseline},
+      {V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE,
+       webrtc::H264Profile::kProfileConstrainedBaseline},
+      {V4L2_MPEG_VIDEO_H264_PROFILE_MAIN, webrtc::H264Profile::kProfileMain},
+      {V4L2_MPEG_VIDEO_H264_PROFILE_HIGH, webrtc::H264Profile::kProfileHigh},
+  };
+  for (const Pref& p : prefs) {
+    v4l2_querymenu qm = {};
+    qm.id = V4L2_CID_MPEG_VIDEO_H264_PROFILE;
+    qm.index = p.v4l2;
+    if (ioctl(fd, VIDIOC_QUERYMENU, &qm) == 0) {
+      *sdp_profile = p.sdp;
+      return p.v4l2;
+    }
+  }
+  // Driver exposes no profile menu; Baseline is the safe universal default.
+  *sdp_profile = webrtc::H264Profile::kProfileConstrainedBaseline;
+  return V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
+}
 
 // True if |fd|'s CAPTURE (coded) side can produce H.264, i.e. it is an encoder.
 bool CaptureSupportsH264(int fd) {
@@ -90,7 +122,30 @@ std::string FindV4L2H264EncoderDevice() {
 
 HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
     std::unique_ptr<webrtc::VideoEncoderFactory> inner)
-    : inner_(std::move(inner)), h264_device_(FindV4L2H264EncoderDevice()) {}
+    : inner_(std::move(inner)),
+      h264_device_(FindV4L2H264EncoderDevice()),
+      h264_profile_(V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE),
+      h264_profile_level_id_("42e01f") {
+  if (h264_device_.empty()) {
+    return;
+  }
+  int fd = open(h264_device_.c_str(), O_RDWR | O_CLOEXEC);
+  if (fd < 0) {
+    return;
+  }
+  webrtc::H264Profile sdp_profile;
+  h264_profile_ = ProbeBestH264Profile(fd, &sdp_profile);
+  close(fd);
+  // Advertise a level (3.1) covering cuttlefish's default display; the encoder
+  // is configured to the same level.
+  auto plid = webrtc::H264ProfileLevelIdToString(
+      webrtc::H264ProfileLevelId(sdp_profile, webrtc::H264Level::kLevel3_1));
+  if (plid) {
+    h264_profile_level_id_ = *plid;
+  }
+  RTC_LOG(LS_INFO) << "V4L2 H264 encoder profile: v4l2=" << h264_profile_
+                   << " profile-level-id=" << h264_profile_level_id_;
+}
 
 std::vector<webrtc::SdpVideoFormat>
 HardwareVideoEncoderFactory::GetSupportedFormats() const {
@@ -99,14 +154,14 @@ HardwareVideoEncoderFactory::GetSupportedFormats() const {
     // The builtin software factory usually has no H.264 encoder, so it never
     // advertises H.264 -- which leaves the offer with an empty video codec set
     // when H.264 is selected. Advertise it ourselves since the V4L2 hardware
-    // encoder provides it. Constrained-baseline (matching what the encoder is
-    // configured to produce), both packetization modes, which browsers accept.
+    // encoder provides it, at the profile the device was probed to support,
+    // in both packetization modes, which browsers accept.
     for (const char* packetization_mode : {"1", "0"}) {
       webrtc::SdpVideoFormat h264(
           kH264CodecName,
           {{"level-asymmetry-allowed", "1"},
            {"packetization-mode", packetization_mode},
-           {"profile-level-id", "42e01f"}});
+           {"profile-level-id", h264_profile_level_id_}});
       if (std::find(formats.begin(), formats.end(), h264) == formats.end()) {
         formats.push_back(h264);
       }
@@ -120,7 +175,7 @@ HardwareVideoEncoderFactory::CreateVideoEncoder(
     const webrtc::SdpVideoFormat& format) {
   if (!h264_device_.empty() && format.name == kH264CodecName) {
     RTC_LOG(LS_INFO) << "Using V4L2 hardware H264 encoder on " << h264_device_;
-    return std::make_unique<V4L2H264Encoder>(h264_device_);
+    return std::make_unique<V4L2H264Encoder>(h264_device_, h264_profile_);
   }
   return inner_->CreateVideoEncoder(format);
 }

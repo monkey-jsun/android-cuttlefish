@@ -52,7 +52,9 @@ class V4L2H264EncodeConverter {
   typedef std::function<void(uint8_t*, int, int64_t, bool)> OnCompleteCallback;
 
   // |device| is the V4L2 m2m encoder node, e.g. "/dev/video11".
+  // |h264_profile| is the V4L2_MPEG_VIDEO_H264_PROFILE_* value to configure.
   static std::shared_ptr<V4L2H264EncodeConverter> Create(std::string device,
+                                                         int h264_profile,
                                                          int src_memory,
                                                          int src_width,
                                                          int src_height,
@@ -63,6 +65,7 @@ class V4L2H264EncodeConverter {
   static constexpr int NUM_CAPTURE_BUFFERS = 4;
 
   int Init(std::string device,
+           int h264_profile,
            int src_memory,
            int src_width,
            int src_height,

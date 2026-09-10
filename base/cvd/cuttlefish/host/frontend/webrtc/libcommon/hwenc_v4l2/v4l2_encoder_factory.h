@@ -51,6 +51,8 @@ class HardwareVideoEncoderFactory : public webrtc::VideoEncoderFactory {
  private:
   std::unique_ptr<webrtc::VideoEncoderFactory> inner_;
   std::string h264_device_;  // empty when no hardware H.264 encoder is present
+  int h264_profile_;  // V4L2_MPEG_VIDEO_H264_PROFILE_* the device was probed for
+  std::string h264_profile_level_id_;  // SDP profile-level-id advertised for it
 };
 
 }  // namespace webrtc_streaming
