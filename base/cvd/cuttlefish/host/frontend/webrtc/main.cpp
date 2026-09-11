@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <memory>
 #include <string_view>
 
@@ -429,6 +430,13 @@ int CuttlefishMain() {
       instance.grpc_socket_path() + "/ControlEnvProxyServer.sock";
   streamer_config.operator_path = cvd_config->sig_server_address();
   streamer_config.sdp_video_codec = SdpVideoCodec(FLAGS_video_codec);
+  // Largest configured display, so the H.264 encoder picks a level covering it.
+  for (const auto& display : instance.display_configs()) {
+    streamer_config.max_display_width =
+        std::max(streamer_config.max_display_width, display.width);
+    streamer_config.max_display_height =
+        std::max(streamer_config.max_display_height, display.height);
+  }
   streamer_config.enable_mouse = instance.enable_mouse();
   streamer_config.enable_gamepad = instance.enable_gamepad();
 

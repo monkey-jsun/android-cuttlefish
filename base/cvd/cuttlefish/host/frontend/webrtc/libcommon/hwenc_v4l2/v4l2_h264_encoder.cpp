@@ -67,9 +67,10 @@ bool ContainsVclNal(const uint8_t* p, size_t n) {
 }  // namespace
 
 V4L2H264Encoder::V4L2H264Encoder(std::string device, int h264_profile,
-                                 uint32_t input_format)
+                                 int h264_level, uint32_t input_format)
     : device_(std::move(device)),
       h264_profile_(h264_profile),
+      h264_level_(h264_level),
       input_format_(input_format),
       configured_width_(0),
       configured_height_(0),
@@ -108,8 +109,8 @@ int32_t V4L2H264Encoder::InitEncode(
 
 int32_t V4L2H264Encoder::Configure(int32_t width, int32_t height) {
   h264_encoder_ = V4L2H264EncodeConverter::Create(
-      device_, h264_profile_, input_format_, V4L2_MEMORY_MMAP, width, height,
-      width);
+      device_, h264_profile_, h264_level_, input_format_, V4L2_MEMORY_MMAP,
+      width, height, width);
   if (h264_encoder_ == nullptr) {
     RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to create V4L2 H264 encoder";
     return WEBRTC_VIDEO_CODEC_ERROR;

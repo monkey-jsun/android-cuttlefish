@@ -54,9 +54,11 @@ class V4L2H264EncodeConverter {
 
   // |device| is the V4L2 m2m encoder node, e.g. "/dev/video11".
   // |h264_profile| is the V4L2_MPEG_VIDEO_H264_PROFILE_* value to configure.
+  // |h264_level| is the V4L2_MPEG_VIDEO_H264_LEVEL_* covering the frame size.
   // |input_format| is the V4L2_PIX_FMT_* the device accepts on its input queue.
   static std::shared_ptr<V4L2H264EncodeConverter> Create(std::string device,
                                                          int h264_profile,
+                                                         int h264_level,
                                                          uint32_t input_format,
                                                          int src_memory,
                                                          int src_width,
@@ -69,6 +71,7 @@ class V4L2H264EncodeConverter {
 
   int Init(std::string device,
            int h264_profile,
+           int h264_level,
            uint32_t input_format,
            int src_memory,
            int src_width,

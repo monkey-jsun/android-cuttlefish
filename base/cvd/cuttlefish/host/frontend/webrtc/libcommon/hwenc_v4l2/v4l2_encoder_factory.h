@@ -39,8 +39,12 @@ std::string FindV4L2H264EncoderDevice();
 // inner factory unchanged.
 class HardwareVideoEncoderFactory : public webrtc::VideoEncoderFactory {
  public:
-  explicit HardwareVideoEncoderFactory(
-      std::unique_ptr<webrtc::VideoEncoderFactory> inner);
+  // |max_display_width|/|max_display_height| are the largest display the
+  // device serves; the offered and configured H.264 level is scaled to cover
+  // that frame size.
+  HardwareVideoEncoderFactory(
+      std::unique_ptr<webrtc::VideoEncoderFactory> inner,
+      int max_display_width, int max_display_height);
 
   std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
 
@@ -53,6 +57,7 @@ class HardwareVideoEncoderFactory : public webrtc::VideoEncoderFactory {
   std::unique_ptr<webrtc::VideoEncoderFactory> inner_;
   std::string h264_device_;  // empty when no hardware H.264 encoder is present
   int h264_profile_;  // V4L2_MPEG_VIDEO_H264_PROFILE_* the device was probed for
+  int h264_level_;    // V4L2_MPEG_VIDEO_H264_LEVEL_* covering the display size
   uint32_t h264_input_format_;  // V4L2_PIX_FMT_* the input queue accepts
   std::string h264_profile_level_id_;  // SDP profile-level-id advertised for it
 };

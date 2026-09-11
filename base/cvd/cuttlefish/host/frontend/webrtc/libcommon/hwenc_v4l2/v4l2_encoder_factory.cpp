@@ -71,6 +71,36 @@ int ProbeBestH264Profile(int fd, webrtc::H264Profile* sdp_profile) {
   return V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE;
 }
 
+// Smallest H.264 level whose frame-size limit covers width x height, floored
+// at 3.1 (cuttlefish's default 720x1280 is exactly 3.1). Returns the level to
+// advertise in SDP and, via |v4l2_level|, the V4L2 control value to configure.
+// A level that under-claims the resolution yields a non-conforming stream, so
+// this scales it up with the display instead of assuming 3.1.
+webrtc::H264Level H264LevelForFrame(int width, int height, int* v4l2_level) {
+  const int mb = ((width + 15) / 16) * ((height + 15) / 16);
+  struct Entry {
+    int max_mb_frame_size;
+    webrtc::H264Level sdp;
+    int v4l2;
+  };
+  static const Entry kLevels[] = {
+      {3600, webrtc::H264Level::kLevel3_1, V4L2_MPEG_VIDEO_H264_LEVEL_3_1},
+      {5120, webrtc::H264Level::kLevel3_2, V4L2_MPEG_VIDEO_H264_LEVEL_3_2},
+      {8192, webrtc::H264Level::kLevel4, V4L2_MPEG_VIDEO_H264_LEVEL_4_0},
+      {8704, webrtc::H264Level::kLevel4_2, V4L2_MPEG_VIDEO_H264_LEVEL_4_2},
+      {22080, webrtc::H264Level::kLevel5, V4L2_MPEG_VIDEO_H264_LEVEL_5_0},
+      {36864, webrtc::H264Level::kLevel5_1, V4L2_MPEG_VIDEO_H264_LEVEL_5_1},
+  };
+  for (const Entry& e : kLevels) {
+    if (mb <= e.max_mb_frame_size) {
+      *v4l2_level = e.v4l2;
+      return e.sdp;
+    }
+  }
+  *v4l2_level = V4L2_MPEG_VIDEO_H264_LEVEL_5_1;  // cap at the table's top
+  return webrtc::H264Level::kLevel5_1;
+}
+
 // Pick the encoder input pixel format, preferring CPU-friendly planar /
 // semi-planar 4:2:0 layouts the device enumerates on its input (OUTPUT) queue.
 uint32_t ProbeBestInputFormat(int fd) {
@@ -226,10 +256,12 @@ std::string FindV4L2H264EncoderDevice() {
 }
 
 HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
-    std::unique_ptr<webrtc::VideoEncoderFactory> inner)
+    std::unique_ptr<webrtc::VideoEncoderFactory> inner, int max_display_width,
+    int max_display_height)
     : inner_(std::move(inner)),
       h264_device_(FindV4L2H264EncoderDevice()),
       h264_profile_(V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE),
+      h264_level_(V4L2_MPEG_VIDEO_H264_LEVEL_3_1),
       h264_input_format_(V4L2_PIX_FMT_YUV420M),
       h264_profile_level_id_("42e01f") {
   if (h264_device_.empty()) {
@@ -243,10 +275,12 @@ HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
   h264_profile_ = ProbeBestH264Profile(fd, &sdp_profile);
   h264_input_format_ = ProbeBestInputFormat(fd);
   close(fd);
-  // Advertise a level (3.1) covering cuttlefish's default display; the encoder
-  // is configured to the same level.
+  // Pick the level from the largest display so the advertised profile-level-id
+  // and the encoder's configured level both cover the actual frame size.
+  webrtc::H264Level sdp_level =
+      H264LevelForFrame(max_display_width, max_display_height, &h264_level_);
   auto plid = webrtc::H264ProfileLevelIdToString(
-      webrtc::H264ProfileLevelId(sdp_profile, webrtc::H264Level::kLevel3_1));
+      webrtc::H264ProfileLevelId(sdp_profile, sdp_level));
   if (plid) {
     h264_profile_level_id_ = *plid;
   }
@@ -286,8 +320,8 @@ HardwareVideoEncoderFactory::CreateVideoEncoder(
     const webrtc::SdpVideoFormat& format) {
   if (!h264_device_.empty() && format.name == kH264CodecName) {
     RTC_LOG(LS_INFO) << "Using V4L2 hardware H264 encoder on " << h264_device_;
-    return std::make_unique<V4L2H264Encoder>(h264_device_, h264_profile_,
-                                             h264_input_format_);
+    return std::make_unique<V4L2H264Encoder>(
+        h264_device_, h264_profile_, h264_level_, h264_input_format_);
   }
   return inner_->CreateVideoEncoder(format);
 }

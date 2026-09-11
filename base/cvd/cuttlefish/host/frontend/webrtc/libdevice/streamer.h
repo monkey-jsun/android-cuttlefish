@@ -56,6 +56,9 @@ struct StreamerConfig {
   std::string control_env_proxy_server_path;
   // SDP name of the single video codec the device offers, e.g. "VP8".
   std::string sdp_video_codec;
+  // Largest display served, used to pick the H.264 level (0 if unknown).
+  int max_display_width = 0;
+  int max_display_height = 0;
   // Whether mouse is enabled.
   bool enable_mouse;
   // Whether gamepad is enabled.

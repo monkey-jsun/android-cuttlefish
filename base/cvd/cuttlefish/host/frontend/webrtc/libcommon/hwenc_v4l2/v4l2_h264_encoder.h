@@ -39,10 +39,12 @@ namespace webrtc_streaming {
 // A webrtc::VideoEncoder that encodes H.264 on a V4L2 m2m hardware encoder.
 class V4L2H264Encoder : public webrtc::VideoEncoder {
  public:
-  // |h264_profile| is the V4L2_MPEG_VIDEO_H264_PROFILE_* value to encode with
-  // and |input_format| the V4L2_PIX_FMT_* the input queue accepts, both chosen
-  // by the factory from what the device supports.
-  V4L2H264Encoder(std::string device, int h264_profile, uint32_t input_format);
+  // |h264_profile| is the V4L2_MPEG_VIDEO_H264_PROFILE_* value to encode with,
+  // |h264_level| the V4L2_MPEG_VIDEO_H264_LEVEL_* covering the frame size, and
+  // |input_format| the V4L2_PIX_FMT_* the input queue accepts -- all chosen by
+  // the factory from what the device and display require.
+  V4L2H264Encoder(std::string device, int h264_profile, int h264_level,
+                  uint32_t input_format);
   ~V4L2H264Encoder() override;
 
   int32_t InitEncode(const webrtc::VideoCodec* codec_settings,
@@ -77,6 +79,7 @@ class V4L2H264Encoder : public webrtc::VideoEncoder {
  private:
   std::string device_;
   int h264_profile_;
+  int h264_level_;
   uint32_t input_format_;
   std::shared_ptr<V4L2H264EncodeConverter> h264_encoder_;
 

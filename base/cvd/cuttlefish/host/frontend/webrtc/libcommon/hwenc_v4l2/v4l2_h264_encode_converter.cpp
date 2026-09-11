@@ -96,14 +96,15 @@ int V4L2Helper::QueueBuffers(int fd, const V4L2Buffers& buffers) {
 std::shared_ptr<V4L2H264EncodeConverter> V4L2H264EncodeConverter::Create(
     std::string device,
     int h264_profile,
+    int h264_level,
     uint32_t input_format,
     int src_memory,
     int src_width,
     int src_height,
     int src_stride) {
   auto p = std::make_shared<V4L2H264EncodeConverter>();
-  if (p->Init(device, h264_profile, input_format, src_memory, src_width,
-              src_height, src_stride) != WEBRTC_VIDEO_CODEC_OK) {
+  if (p->Init(device, h264_profile, h264_level, input_format, src_memory,
+              src_width, src_height, src_stride) != WEBRTC_VIDEO_CODEC_OK) {
     return nullptr;
   }
   return p;
@@ -111,6 +112,7 @@ std::shared_ptr<V4L2H264EncodeConverter> V4L2H264EncodeConverter::Create(
 
 int V4L2H264EncodeConverter::Init(std::string device,
                                   int h264_profile,
+                                  int h264_level,
                                   uint32_t input_format,
                                   int src_memory,
                                   int src_width,
@@ -138,8 +140,8 @@ int V4L2H264EncodeConverter::Init(std::string device,
   }
 
   ctrl.id = V4L2_CID_MPEG_VIDEO_H264_LEVEL;
-  // 3.1 matches the advertised profile-level-id and fits 720x1280.
-  ctrl.value = V4L2_MPEG_VIDEO_H264_LEVEL_3_1;
+  // Level covering the frame size, matching the advertised profile-level-id.
+  ctrl.value = h264_level;
   if (ioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0) {
     RTC_LOG(LS_ERROR) << __FUNCTION__ << "  Failed to set level";
     return WEBRTC_VIDEO_CODEC_ERROR;

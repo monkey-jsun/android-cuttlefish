@@ -44,7 +44,8 @@ CreatePeerConnectionFactory(
     rtc::Thread* network_thread, rtc::Thread* worker_thread,
     rtc::Thread* signal_thread,
     rtc::scoped_refptr<webrtc::AudioDeviceModule> audio_device_module,
-    const std::string& sdp_video_codec) {
+    const std::string& sdp_video_codec, int max_display_width,
+    int max_display_height) {
   auto peer_connection_factory = webrtc::CreatePeerConnectionFactory(
       network_thread, worker_thread, signal_thread, audio_device_module,
       webrtc::CreateBuiltinAudioEncoderFactory(),
@@ -54,7 +55,8 @@ CreatePeerConnectionFactory(
       // otherwise everything falls back to the builtin software encoders.
       std::make_unique<SingleCodecEncoderFactory>(
           std::make_unique<HardwareVideoEncoderFactory>(
-              webrtc::CreateBuiltinVideoEncoderFactory()),
+              webrtc::CreateBuiltinVideoEncoderFactory(), max_display_width,
+              max_display_height),
           sdp_video_codec),
       webrtc::CreateBuiltinVideoDecoderFactory(), nullptr /* audio_mixer */,
       nullptr /* audio_processing */);
