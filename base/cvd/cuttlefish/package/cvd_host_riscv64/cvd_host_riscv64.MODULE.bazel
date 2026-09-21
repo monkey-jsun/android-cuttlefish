@@ -7,8 +7,8 @@ http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_
 
 http_file(
     name = "crosvm_riscv64",
-    urls = ["https://github.com/monkey-jsun/crosvm/releases/download/cf-k3-v1.3.0/crosvm-cf-k3-v1.3.0"],
-    sha256 = "cfee43cff605a9bdefda93f4dd2e2340ae86d5462b3f00a30a2449316bfea979",
+    urls = ["https://github.com/monkey-jsun/crosvm/releases/download/cf-k3-v1.3.1/crosvm-cf-k3-v1.3.1"],
+    sha256 = "e1f0909c993d2f6025b619d61bbabf0338f909ed540ec660e88bd2092d1c22e2",
     executable = True,
     downloaded_file_path = "crosvm",
 )
