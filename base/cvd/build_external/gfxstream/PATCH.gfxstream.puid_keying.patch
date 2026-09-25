@@ -1,0 +1,24 @@
+--- a/host/virtio_gpu_pipe.cpp
++++ b/host/virtio_gpu_pipe.cpp
+@@ -15,6 +15,7 @@
+ #include "virtio_gpu_pipe.h"
+ 
+ #include <cstring>
++#include <limits>
+ 
+ #include "gfxstream/common/logging.h"
+ #include "gfxstream/system/System.h"
+@@ -89,7 +90,12 @@
+         return -EINVAL;
+     }
+ 
+-    std::memcpy(outRequestedData, (const char*)&mUniqueId, sizeof(mUniqueId));
++    // virtio-gpu keys host process resources by the virtio context id, and cleanup
++    // (VirtioGpuContext::Destroy) frees them by that id, so the guest PUID must equal
++    // the context id.  Send the sentinel that rcSetPuid ignores rather than this pipe's
++    // unique id (which is kept only for the log messages above).
++    const uint64_t kGuestPuid = std::numeric_limits<uint64_t>::max();  // == kInvalidPUID
++    std::memcpy(outRequestedData, (const char*)&kGuestPuid, sizeof(kGuestPuid));
+ 
+     mSentUniqueId = true;
+     return 0;
