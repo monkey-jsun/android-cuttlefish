@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 
 #include <cstdlib>
+#include <cstring>  // strsignal
 #include <optional>
 #include <string>
 #include <string_view>
@@ -104,9 +105,17 @@ Result<int> RunProcessRestarter(std::vector<std::string> args) {
       continue;
     }
     if (info.si_code == CLD_EXITED) {
+      if (info.si_status != 0) {
+        LOG(ERROR) << "Process " << exec_args.front()
+                   << " exited with non-zero code " << info.si_status;
+      }
       return info.si_status;
     }
-    LOG(ERROR) << "Process exited with unexpected si_code: " << info.si_code;
+    // CLD_KILLED and CLD_DUMPED carry the terminating signal in si_status.
+    LOG(ERROR) << "Process " << exec_args.front() << " was terminated by signal "
+               << info.si_status << " (" << strsignal(info.si_status)
+               << "), si_code " << info.si_code
+               << (info.si_code == CLD_DUMPED ? " (core dumped)" : " (no core)");
     return 1;
   }
 }
